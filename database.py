@@ -113,7 +113,9 @@ def create_user(username: str, hashed_password: str) -> dict:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    f"INSERT INTO users (username, hashed_password) VALUES ({p}, {p}) RETURNING id, username, is_active",
+                    f"INSERT INTO users (username, hashed_password)"
+                    f" VALUES ({p}, {p})"
+                    f" RETURNING id, username, is_active",
                     (username, hashed_password),
                 )
                 row = cur.fetchone()
@@ -134,12 +136,18 @@ def get_user_by_username(username: str) -> dict | None:
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(f"SELECT * FROM users WHERE username = {p}", (username,))
+                cur.execute(
+                    f"SELECT * FROM users WHERE username = {p}", 
+                    (username,)
+                )
                 row = cur.fetchone()
         return dict(row) if row else None
     else:
         with get_connection() as conn:
-            row = conn.execute(f"SELECT * FROM users WHERE username = {p}", (username,)).fetchone()
+            row = conn.execute(
+                f"SELECT * FROM users WHERE username = {p}", 
+                (username,)
+            ).fetchone()
         return dict(row) if row else None
 
 
@@ -153,7 +161,10 @@ def get_user_by_id(user_id: int) -> dict | None:
         return dict(row) if row else None
     else:
         with get_connection() as conn:
-            row = conn.execute(f"SELECT * FROM users WHERE id = {p}", (user_id,)).fetchone()
+            row = conn.execute(
+                f"SELECT * FROM users WHERE id = {p}", 
+                (user_id,)
+            ).fetchone()
         return dict(row) if row else None
 
 

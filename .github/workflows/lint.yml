@@ -70,7 +70,7 @@ jobs:
               return;
             }
 
-            let body = `${MARKER}\n## Ruff encontró errores\n\n`;
+            let body = `${MARKER}\n## Ruff found errors\n\n`;
 
             if (hasLintErrors) {
               body += `### Lint\n\`\`\`\n${lintOutput}\n\`\`\`\n\n`;
