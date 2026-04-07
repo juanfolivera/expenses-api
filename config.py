@@ -14,6 +14,9 @@ Environment reference:
                      (default: * in dev, must be set explicitly in prod)
   APP_NAME           Display name for the API (default: "Expenses API")
   DOLLAR_CACHE_TTL   Seconds to cache the exchange rate (default: 300)
+  JWT_SECRET_KEY     Secret key used to sign JWT tokens. MUST be set in production.
+  ACCESS_TOKEN_EXPIRE_MINUTES   Access token lifetime in minutes (default: 30)
+  REFRESH_TOKEN_EXPIRE_DAYS     Refresh token lifetime in days (default: 30)
 """
 
 import os
@@ -59,6 +62,13 @@ def _parse_origins() -> list[str]:
 
 ALLOWED_ORIGINS: list[str] = _parse_origins()
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
+JWT_ALGORITHM:  str = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS:   int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+
 # ── Validation ────────────────────────────────────────────────────────────────
 
 def validate():
@@ -76,6 +86,9 @@ def validate():
             "ALLOWED_ORIGINS is required in production. "
             "Set it to your app's URL, e.g. 'https://myapp.com'"
         )
+
+    if IS_PROD and JWT_SECRET_KEY == "dev-secret-change-in-production":
+        errors.append("JWT_SECRET_KEY must be set to a strong secret in production.")
 
     if errors:
         raise EnvironmentError(
@@ -97,5 +110,7 @@ def print_config():
 │  Database      : {db_info}
 │  CORS origins  : {ALLOWED_ORIGINS}
 │  Rate cache TTL: {DOLLAR_CACHE_TTL}s
+│  Access token  : {ACCESS_TOKEN_EXPIRE_MINUTES}min
+│  Refresh token : {REFRESH_TOKEN_EXPIRE_DAYS}d
 └{'─' * 50}
 """)

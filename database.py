@@ -57,10 +57,18 @@ def _row_to_dict(row) -> dict:
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 def init_db():
-    """Creates the expenses table if it doesn't exist."""
+    """Creates the users and expenses tables if they don't exist."""
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id              SERIAL PRIMARY KEY,
+                        username        TEXT UNIQUE NOT NULL,
+                        hashed_password TEXT NOT NULL,
+                        is_active       BOOLEAN NOT NULL DEFAULT TRUE
+                    )
+                """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS expenses (
                         id          SERIAL PRIMARY KEY,
@@ -76,6 +84,14 @@ def init_db():
     else:
         with get_connection() as conn:
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username        TEXT UNIQUE NOT NULL,
+                    hashed_password TEXT NOT NULL,
+                    is_active       INTEGER NOT NULL DEFAULT 1
+                )
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS expenses (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     amount_uyu  REAL NOT NULL,
@@ -89,7 +105,59 @@ def init_db():
             conn.commit()
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────────
+# ── Users ─────────────────────────────────────────────────────────────────────
+
+def create_user(username: str, hashed_password: str) -> dict:
+    p = _placeholder()
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    f"INSERT INTO users (username, hashed_password) VALUES ({p}, {p}) RETURNING id, username, is_active",
+                    (username, hashed_password),
+                )
+                row = cur.fetchone()
+            conn.commit()
+        return dict(row)
+    else:
+        with get_connection() as conn:
+            cursor = conn.execute(
+                f"INSERT INTO users (username, hashed_password) VALUES ({p}, {p})",
+                (username, hashed_password),
+            )
+            conn.commit()
+            return get_user_by_id(cursor.lastrowid)
+
+
+def get_user_by_username(username: str) -> dict | None:
+    p = _placeholder()
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(f"SELECT * FROM users WHERE username = {p}", (username,))
+                row = cur.fetchone()
+        return dict(row) if row else None
+    else:
+        with get_connection() as conn:
+            row = conn.execute(f"SELECT * FROM users WHERE username = {p}", (username,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    p = _placeholder()
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(f"SELECT * FROM users WHERE id = {p}", (user_id,))
+                row = cur.fetchone()
+        return dict(row) if row else None
+    else:
+        with get_connection() as conn:
+            row = conn.execute(f"SELECT * FROM users WHERE id = {p}", (user_id,)).fetchone()
+        return dict(row) if row else None
+
+
+# ── Expenses CRUD ─────────────────────────────────────────────────────────────
 
 def create_expense(
     amount_uyu:  float,

@@ -9,10 +9,12 @@ Interactive docs at: http://localhost:8000/docs
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
+import auth
 import config
 import database as db
 import dolar_uy
@@ -71,6 +73,26 @@ class ExpenseResponse(BaseModel):
     date:        str
 
 
+class UserRegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8)
+
+
+class UserResponse(BaseModel):
+    id:       int
+    username: str
+
+
+class TokenResponse(BaseModel):
+    access_token:  str
+    refresh_token: str
+    token_type:    str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 class MonthlySummary(BaseModel):
     month:     str
     count:     int
@@ -83,6 +105,51 @@ class RateResponse(BaseModel):
     sell:       float
     average:    float
     updated_at: str
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.post("/auth/register", response_model=UserResponse, status_code=201, tags=["Auth"])
+def register(body: UserRegisterRequest):
+    """Creates a new user account."""
+    if db.get_user_by_username(body.username):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+    user = db.create_user(body.username, auth.hash_password(body.password))
+    return user
+
+
+@app.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
+def login(form: OAuth2PasswordRequestForm = Depends()):
+    """
+    Authenticates with username and password (form data).
+    Returns a short-lived access token and a long-lived refresh token.
+    """
+    user = db.get_user_by_username(form.username)
+    if not user or not auth.verify_password(form.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user["is_active"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+    return {
+        "access_token":  auth.create_access_token(user["username"]),
+        "refresh_token": auth.create_refresh_token(user["username"]),
+    }
+
+
+@app.post("/auth/refresh", response_model=TokenResponse, tags=["Auth"])
+def refresh(body: RefreshRequest):
+    """Exchanges a valid refresh token for a new access token."""
+    username = auth.decode_token(body.refresh_token, "refresh")
+    user = db.get_user_by_username(username)
+    if not user or not user["is_active"]:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    return {
+        "access_token":  auth.create_access_token(username),
+        "refresh_token": auth.create_refresh_token(username),
+    }
 
 
 # ── Dollar ────────────────────────────────────────────────────────────────────
@@ -100,7 +167,7 @@ def current_rate():
 # ── Expenses ──────────────────────────────────────────────────────────────────
 
 @app.post("/expenses", response_model=ExpenseResponse, status_code=201, tags=["Expenses"])
-def create_expense(expense: ExpenseRequest):
+def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_user)):
     """
     Records a new expense. Automatically fetches the current exchange rate
     and stores the USD equivalent alongside the rate used.
@@ -124,7 +191,7 @@ def create_expense(expense: ExpenseRequest):
 
     return db.create_expense(
         amount_uyu  = expense.amount_uyu,
-        amount_usd  = round(expense.amount_uyu / rate.sell, 2),
+        amount_usd  = round(expense.amount_uyu / rate.buy, 2),
         dollar_rate = rate.sell,
         category    = expense.category,
         description = expense.description,
@@ -135,13 +202,14 @@ def create_expense(expense: ExpenseRequest):
 @app.get("/expenses", response_model=list[ExpenseResponse], tags=["Expenses"])
 def list_expenses(
     month: Optional[str] = Query(None, description="Filter by month, format YYYY-MM. E.g. 2026-05"),
+    _: dict = Depends(auth.get_current_user),
 ):
     """Lists all expenses, optionally filtered by month."""
     return db.list_expenses(month=month)
 
 
 @app.get("/expenses/{expense_id}", response_model=ExpenseResponse, tags=["Expenses"])
-def get_expense(expense_id: int):
+def get_expense(expense_id: int, _: dict = Depends(auth.get_current_user)):
     """Returns a single expense by ID."""
     expense = db.get_expense(expense_id)
     if not expense:
@@ -150,7 +218,7 @@ def get_expense(expense_id: int):
 
 
 @app.delete("/expenses/{expense_id}", status_code=204, tags=["Expenses"])
-def delete_expense(expense_id: int):
+def delete_expense(expense_id: int, _: dict = Depends(auth.get_current_user)):
     """Deletes an expense by ID."""
     if not db.delete_expense(expense_id):
         raise HTTPException(status_code=404, detail="Expense not found")
@@ -159,12 +227,19 @@ def delete_expense(expense_id: int):
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 @app.get("/summary/{month}", response_model=MonthlySummary, tags=["Summary"])
-def monthly_summary(month: str):
+def monthly_summary(month: str, _: dict = Depends(auth.get_current_user)):
     """Returns total expenses for a given month in UYU and USD. Format: YYYY-MM"""
     return db.monthly_summary(month)
 
 
 @app.get("/summary/{month}/categories", tags=["Summary"])
-def summary_by_category(month: str):
+def summary_by_category(month: str, _: dict = Depends(auth.get_current_user)):
     """Returns monthly totals broken down by category."""
     return db.summary_by_category(month=month)
+
+# ── Health ───────────────────────────────────────────────────────────────────
+
+@app.get("/health", tags=["Health"])
+def health():
+    """Public endpoint to verify if API is running"""
+    return {"status": "ok"}
