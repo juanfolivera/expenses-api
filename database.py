@@ -186,11 +186,17 @@ def create_expense(
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     f"""
-                    INSERT INTO expenses (amount_uyu, amount_usd, dollar_rate, category, description, date)
+                    INSERT INTO expenses (
+                        amount_uyu, amount_usd, dollar_rate,
+                        category, description, date
+                    )
                     VALUES ({p}, {p}, {p}, {p}, {p}, {p})
                     RETURNING *
                     """,
-                    (amount_uyu, amount_usd, dollar_rate, category, description, date_val),
+                    (
+                        amount_uyu, amount_usd, dollar_rate,
+                        category, description, date_val,
+                    ),
                 )
                 row = cur.fetchone()
             conn.commit()
@@ -199,10 +205,16 @@ def create_expense(
         with get_connection() as conn:
             cursor = conn.execute(
                 f"""
-                INSERT INTO expenses (amount_uyu, amount_usd, dollar_rate, category, description, date)
+                INSERT INTO expenses (
+                    amount_uyu, amount_usd, dollar_rate,
+                    category, description, date
+                )
                 VALUES ({p}, {p}, {p}, {p}, {p}, {p})
                 """,
-                (amount_uyu, amount_usd, dollar_rate, category, description, date_val.isoformat()),
+                (
+                    amount_uyu, amount_usd, dollar_rate,
+                    category, description, date_val.isoformat(),
+                ),
             )
             conn.commit()
             return get_expense(cursor.lastrowid)
@@ -218,7 +230,10 @@ def get_expense(expense_id: int) -> dict | None:
         return _serialize(dict(row)) if row else None
     else:
         with get_connection() as conn:
-            row = conn.execute(f"SELECT * FROM expenses WHERE id = {p}", (expense_id,)).fetchone()
+            row = conn.execute(
+                f"SELECT * FROM expenses WHERE id = {p}",
+                (expense_id,),
+            ).fetchone()
         return dict(row) if row else None
 
 
@@ -234,7 +249,9 @@ def list_expenses(month: str | None = None) -> list[dict]:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 if month:
                     cur.execute(
-                        "SELECT * FROM expenses WHERE to_char(date, 'YYYY-MM') = %s ORDER BY date DESC",
+                        "SELECT * FROM expenses"
+                        " WHERE to_char(date, 'YYYY-MM') = %s"
+                        " ORDER BY date DESC",
                         (month,),
                     )
                 else:
@@ -245,11 +262,15 @@ def list_expenses(month: str | None = None) -> list[dict]:
         with get_connection() as conn:
             if month:
                 rows = conn.execute(
-                    "SELECT * FROM expenses WHERE strftime('%Y-%m', date) = ? ORDER BY date DESC",
+                    "SELECT * FROM expenses"
+                    " WHERE strftime('%Y-%m', date) = ?"
+                    " ORDER BY date DESC",
                     (month,),
                 ).fetchall()
             else:
-                rows = conn.execute("SELECT * FROM expenses ORDER BY date DESC").fetchall()
+                rows = conn.execute(
+                    "SELECT * FROM expenses ORDER BY date DESC"
+                ).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -272,7 +293,8 @@ def monthly_summary(month: str) -> dict:
                     (month,),
                 )
                 row = cur.fetchone()
-        return dict(row) if row else {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        _empty = {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        return dict(row) if row else _empty
     else:
         with get_connection() as conn:
             row = conn.execute(
@@ -288,7 +310,8 @@ def monthly_summary(month: str) -> dict:
                 """,
                 (month,),
             ).fetchone()
-        return dict(row) if row else {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        _empty = {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        return dict(row) if row else _empty
 
 
 def summary_by_category(month: str | None = None) -> list[dict]:

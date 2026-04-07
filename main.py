@@ -27,7 +27,9 @@ config.print_config()
 
 app = FastAPI(
     title=config.APP_NAME,
-    description="Track expenses in Uruguayan pesos and see their USD equivalent in real time.",
+    description=(
+        "Track expenses in Uruguayan pesos and see their USD equivalent in real time."
+    ),
     version="1.0.0",
     # Disable interactive docs in production
     docs_url="/docs" if config.IS_DEV else None,
@@ -53,13 +55,22 @@ VALID_CATEGORIES = [
 
 
 class ExpenseRequest(BaseModel):
-    amount_uyu:  float         = Field(..., gt=0, description="Amount in Uruguayan pesos")
-    category:    str           = Field(..., description=f"One of: {', '.join(VALID_CATEGORIES)}")
+    amount_uyu:  float         = Field(
+        ..., gt=0, description="Amount in Uruguayan pesos"
+    )
+    category:    str           = Field(
+        ..., description=f"One of: {', '.join(VALID_CATEGORIES)}"
+    )
     description: Optional[str] = Field(None, description="Optional note or description")
-    date:        Optional[str] = Field(None, description="ISO 8601, e.g. '2026-05-20T14:30:00'. Defaults to now.")
+    date:        Optional[str] = Field(
+        None,
+        description="ISO 8601, e.g. '2026-05-20T14:30:00'. Defaults to now.",
+    )
 
     model_config = {"json_schema_extra": {
-        "example": {"amount_uyu": 1500, "category": "food", "description": "Lunch downtown"}
+        "example": {
+            "amount_uyu": 1500, "category": "food", "description": "Lunch downtown",
+        }
     }}
 
 
@@ -113,7 +124,10 @@ class RateResponse(BaseModel):
 def register(body: UserRegisterRequest):
     """Creates a new user account."""
     if db.get_user_by_username(body.username):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username already taken",
+        )
     user = db.create_user(body.username, auth.hash_password(body.password))
     return user
 
@@ -132,7 +146,9 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
             headers={"WWW-Authenticate": "Bearer"},
         )
     if not user["is_active"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
+        )
     return {
         "access_token":  auth.create_access_token(user["username"]),
         "refresh_token": auth.create_refresh_token(user["username"]),
@@ -145,7 +161,10 @@ def refresh(body: RefreshRequest):
     username = auth.decode_token(body.refresh_token, "refresh")
     user = db.get_user_by_username(username)
     if not user or not user["is_active"]:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+        )
     return {
         "access_token":  auth.create_access_token(username),
         "refresh_token": auth.create_refresh_token(username),
@@ -159,14 +178,26 @@ def current_rate():
     """Returns the current USD/UYU exchange rate."""
     try:
         r = dolar_uy.get_dollar()
-        return {"buy": r.buy, "sell": r.sell, "average": r.average, "updated_at": r.updated_at.isoformat()}
+        return {
+            "buy": r.buy,
+            "sell": r.sell,
+            "average": r.average,
+            "updated_at": r.updated_at.isoformat(),
+        }
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Could not fetch exchange rate: {e}")
+        raise HTTPException(
+            status_code=503, detail=f"Could not fetch exchange rate: {e}"
+        )
 
 
 # ── Expenses ──────────────────────────────────────────────────────────────────
 
-@app.post("/expenses", response_model=ExpenseResponse, status_code=201, tags=["Expenses"])
+@app.post(
+    "/expenses",
+    response_model=ExpenseResponse,
+    status_code=201,
+    tags=["Expenses"],
+)
 def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_user)):
     """
     Records a new expense. Automatically fetches the current exchange rate
@@ -180,14 +211,18 @@ def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_u
     try:
         rate = dolar_uy.get_dollar_cached()
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Could not fetch exchange rate: {e}")
+        raise HTTPException(
+            status_code=503, detail=f"Could not fetch exchange rate: {e}"
+        )
 
     date = None
     if expense.date:
         try:
             date = datetime.fromisoformat(expense.date)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid date format. Use ISO 8601.")
+            raise HTTPException(
+                status_code=400, detail="Invalid date format. Use ISO 8601."
+            )
 
     return db.create_expense(
         amount_uyu  = expense.amount_uyu,
@@ -201,7 +236,9 @@ def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_u
 
 @app.get("/expenses", response_model=list[ExpenseResponse], tags=["Expenses"])
 def list_expenses(
-    month: Optional[str] = Query(None, description="Filter by month, format YYYY-MM. E.g. 2026-05"),
+    month: Optional[str] = Query(
+        None, description="Filter by month, format YYYY-MM. E.g. 2026-05"
+    ),
     _: dict = Depends(auth.get_current_user),
 ):
     """Lists all expenses, optionally filtered by month."""

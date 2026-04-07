@@ -76,7 +76,7 @@ jobs:
               body += `### Lint\n\`\`\`\n${lintOutput}\n\`\`\`\n\n`;
             }
             if (hasFormatErrors) {
-              body += `### Formato\n\`\`\`\n${formatOutput}\n\`\`\`\n`;
+              body += `### Format\n\`\`\`\n${formatOutput}\n\`\`\`\n`;
             }
 
             const { data: comments } = await github.rest.issues.listComments({

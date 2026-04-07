@@ -7,11 +7,13 @@ and provides utilities to convert expenses between Uruguayan pesos and dollars.
 API: https://uy.dolarapi.com  (open-source, no API key required)
 """
 
-import requests
+import time
 from dataclasses import dataclass
 from datetime import datetime
-import time
 
+import requests
+
+import config as _config
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -61,7 +63,9 @@ def _parse_rate(data: dict) -> ExchangeRate:
         name       = data.get("nombre", ""),
         buy        = float(data.get("compra", 0)),
         sell       = float(data.get("venta", 0)),
-        updated_at = datetime.fromisoformat(data.get("fechaActualizacion", datetime.now().isoformat())),
+        updated_at = datetime.fromisoformat(
+            data.get("fechaActualizacion", datetime.now().isoformat())
+        ),
     )
 
 
@@ -92,7 +96,8 @@ def pesos_to_dollars(amount_uyu: float, price: str = "sell") -> dict:
         Dict with the USD amount, rate used, and metadata.
     """
     rate = get_dollar()
-    chosen_rate = {"buy": rate.buy, "sell": rate.sell, "average": rate.average}.get(price, rate.sell)
+    rate_map = {"buy": rate.buy, "sell": rate.sell, "average": rate.average}
+    chosen_rate = rate_map.get(price, rate.sell)
     return {
         "amount_uyu": amount_uyu,
         "amount_usd": round(amount_uyu / chosen_rate, 2),
@@ -114,7 +119,8 @@ def dollars_to_pesos(amount_usd: float, price: str = "buy") -> dict:
         Dict with the UYU amount, rate used, and metadata.
     """
     rate = get_dollar()
-    chosen_rate = {"buy": rate.buy, "sell": rate.sell, "average": rate.average}.get(price, rate.buy)
+    rate_map = {"buy": rate.buy, "sell": rate.sell, "average": rate.average}
+    chosen_rate = rate_map.get(price, rate.buy)
     return {
         "amount_usd": amount_usd,
         "amount_uyu": round(amount_usd * chosen_rate, 2),
@@ -127,7 +133,7 @@ def dollars_to_pesos(amount_usd: float, price: str = "buy") -> dict:
 # ── Cached version (avoids redundant API calls when processing multiple expenses) ──
 
 _cache: dict = {"rate": None, "timestamp": 0}
-import config as _config
+
 CACHE_TTL = _config.DOLLAR_CACHE_TTL
 
 
@@ -155,8 +161,12 @@ def convert_expenses(amounts_uyu: list[float], price: str = "sell") -> list[dict
         List of dicts with each conversion result.
     """
     rate = get_dollar_cached()
-    chosen_rate = {"buy": rate.buy, "sell": rate.sell, "average": rate.average}.get(price, rate.sell)
-    return [{"amount_uyu": a, "amount_usd": round(a / chosen_rate, 2), "rate": chosen_rate} for a in amounts_uyu]
+    rate_map = {"buy": rate.buy, "sell": rate.sell, "average": rate.average}
+    chosen_rate = rate_map.get(price, rate.sell)
+    return [
+        {"amount_uyu": a, "amount_usd": round(a / chosen_rate, 2), "rate": chosen_rate}
+        for a in amounts_uyu
+    ]
 
 
 # ── Demo ──────────────────────────────────────────────────────────────────────
@@ -170,10 +180,16 @@ if __name__ == "__main__":
 
     print("\n── Conversion examples ──")
     r1 = pesos_to_dollars(1500.0)
-    print(f"\n$ {r1['amount_uyu']:.2f} UYU → USD {r1['amount_usd']:.2f}  (sell rate: {r1['rate_used']:.2f})")
+    print(
+        f"\n$ {r1['amount_uyu']:.2f} UYU → USD {r1['amount_usd']:.2f}"
+        f"  (sell rate: {r1['rate_used']:.2f})"
+    )
 
     r2 = dollars_to_pesos(100.0)
-    print(f"USD {r2['amount_usd']:.2f} → $ {r2['amount_uyu']:.2f} UYU  (buy rate: {r2['rate_used']:.2f})")
+    print(
+        f"USD {r2['amount_usd']:.2f} → $ {r2['amount_uyu']:.2f} UYU"
+        f"  (buy rate: {r2['rate_used']:.2f})"
+    )
 
     print(f"\nBatch: {[500, 1200, 3400]} UYU")
     for c in convert_expenses([500, 1200, 3400]):
