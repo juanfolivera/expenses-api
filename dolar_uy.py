@@ -18,17 +18,18 @@ import config as _config
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 BASE_URL = "https://uy.dolarapi.com"
-TIMEOUT  = 10  # seconds
+TIMEOUT = 10  # seconds
 
 
 # ── Types ─────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ExchangeRate:
-    currency:   str
-    name:       str
-    buy:        float
-    sell:       float
+    currency: str
+    name: str
+    buy: float
+    sell: float
     updated_at: datetime
 
     @property
@@ -48,6 +49,7 @@ class ExchangeRate:
 
 # ── API access ────────────────────────────────────────────────────────────────
 
+
 def _get(endpoint: str) -> dict:
     """Performs a GET request to the API and returns the JSON response."""
     url = f"{BASE_URL}{endpoint}"
@@ -59,11 +61,11 @@ def _get(endpoint: str) -> dict:
 def _parse_rate(data: dict) -> ExchangeRate:
     """Converts the API dict into an ExchangeRate object."""
     return ExchangeRate(
-        currency   = data.get("moneda", ""),
-        name       = data.get("nombre", ""),
-        buy        = float(data.get("compra", 0)),
-        sell       = float(data.get("venta", 0)),
-        updated_at = datetime.fromisoformat(
+        currency=data.get("moneda", ""),
+        name=data.get("nombre", ""),
+        buy=float(data.get("compra", 0)),
+        sell=float(data.get("venta", 0)),
+        updated_at=datetime.fromisoformat(
             data.get("fechaActualizacion", datetime.now().isoformat())
         ),
     )
@@ -83,6 +85,7 @@ def get_all_rates() -> list[ExchangeRate]:
 
 # ── Conversion utilities ──────────────────────────────────────────────────────
 
+
 def pesos_to_dollars(amount_uyu: float, price: str = "sell") -> dict:
     """
     Converts an amount in Uruguayan pesos to US dollars.
@@ -101,7 +104,7 @@ def pesos_to_dollars(amount_uyu: float, price: str = "sell") -> dict:
     return {
         "amount_uyu": amount_uyu,
         "amount_usd": round(amount_uyu / chosen_rate, 2),
-        "rate_used":  chosen_rate,
+        "rate_used": chosen_rate,
         "price_type": price,
         "updated_at": rate.updated_at,
     }
@@ -124,7 +127,7 @@ def dollars_to_pesos(amount_usd: float, price: str = "buy") -> dict:
     return {
         "amount_usd": amount_usd,
         "amount_uyu": round(amount_usd * chosen_rate, 2),
-        "rate_used":  chosen_rate,
+        "rate_used": chosen_rate,
         "price_type": price,
         "updated_at": rate.updated_at,
     }
@@ -144,7 +147,7 @@ def get_dollar_cached() -> ExchangeRate:
     """
     now = time.time()
     if _cache["rate"] is None or (now - _cache["timestamp"]) > CACHE_TTL:
-        _cache["rate"]      = get_dollar()
+        _cache["rate"] = get_dollar()
         _cache["timestamp"] = now
     return _cache["rate"]
 

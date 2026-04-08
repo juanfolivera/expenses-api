@@ -25,6 +25,7 @@ from pathlib import Path
 # Load .env file if it exists (only relevant locally — Railway sets vars natively)
 try:
     from dotenv import load_dotenv
+
     load_dotenv(Path(__file__).parent / ".env")
 except ImportError:
     pass  # python-dotenv not installed — that's fine in production
@@ -32,9 +33,9 @@ except ImportError:
 
 # ── Core ──────────────────────────────────────────────────────────────────────
 
-ENVIRONMENT:  str = os.getenv("ENVIRONMENT", "development")
-IS_PROD:      bool = ENVIRONMENT == "production"
-IS_DEV:       bool = not IS_PROD
+ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+IS_PROD: bool = ENVIRONMENT == "production"
+IS_DEV: bool = not IS_PROD
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ DOLLAR_CACHE_TTL: int = int(os.getenv("DOLLAR_CACHE_TTL", "300"))  # seconds
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 
+
 def _parse_origins() -> list[str]:
     raw = os.getenv("ALLOWED_ORIGINS", "")
     if raw.strip():
@@ -60,16 +62,18 @@ def _parse_origins() -> list[str]:
     # Prod default: restrictive — forces you to set ALLOWED_ORIGINS explicitly
     return ["*"] if IS_DEV else []
 
+
 ALLOWED_ORIGINS: list[str] = _parse_origins()
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
-JWT_ALGORITHM:  str = "HS256"
+JWT_ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-REFRESH_TOKEN_EXPIRE_DAYS:   int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 # ── Validation ────────────────────────────────────────────────────────────────
+
 
 def validate():
     """
@@ -92,11 +96,13 @@ def validate():
 
     if errors:
         raise EnvironmentError(
-            "Invalid configuration for production environment:\n" +
-            "\n".join(f"  - {e}" for e in errors)
+            "Invalid configuration for production environment:\n"
+            + "\n".join(f"  - {e}" for e in errors)
         )
 
+
 # ── Debug summary ─────────────────────────────────────────────────────────────
+
 
 def print_config():
     """Prints the current configuration at startup (only in dev mode)."""
@@ -104,7 +110,7 @@ def print_config():
         return
     db_info = DATABASE_URL[:30] + "..." if DATABASE_URL else "SQLite (local)"
     print(f"""
-┌─ Config ({'PRODUCTION' if IS_PROD else 'DEVELOPMENT'}) {'─' * 30}
+┌─ Config ({"PRODUCTION" if IS_PROD else "DEVELOPMENT"}) {"─" * 30}
 │  App name      : {APP_NAME}
 │  Debug         : {DEBUG}
 │  Database      : {db_info}
@@ -112,5 +118,5 @@ def print_config():
 │  Rate cache TTL: {DOLLAR_CACHE_TTL}s
 │  Access token  : {ACCESS_TOKEN_EXPIRE_MINUTES}min
 │  Refresh token : {REFRESH_TOKEN_EXPIRE_DAYS}d
-└{'─' * 50}
+└{"─" * 50}
 """)

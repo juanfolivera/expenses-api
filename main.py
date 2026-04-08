@@ -49,39 +49,45 @@ db.init_db()
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 VALID_CATEGORIES = [
-    "food", "transport", "health", "entertainment",
-    "clothing", "home", "education", "other",
+    "food",
+    "transport",
+    "health",
+    "entertainment",
+    "clothing",
+    "home",
+    "education",
+    "other",
 ]
 
 
 class ExpenseRequest(BaseModel):
-    amount_uyu:  float         = Field(
-        ..., gt=0, description="Amount in Uruguayan pesos"
-    )
-    category:    str           = Field(
-        ..., description=f"One of: {', '.join(VALID_CATEGORIES)}"
-    )
+    amount_uyu: float = Field(..., gt=0, description="Amount in Uruguayan pesos")
+    category: str = Field(..., description=f"One of: {', '.join(VALID_CATEGORIES)}")
     description: Optional[str] = Field(None, description="Optional note or description")
-    date:        Optional[str] = Field(
+    date: Optional[str] = Field(
         None,
         description="ISO 8601, e.g. '2026-05-20T14:30:00'. Defaults to now.",
     )
 
-    model_config = {"json_schema_extra": {
-        "example": {
-            "amount_uyu": 1500, "category": "food", "description": "Lunch downtown",
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "amount_uyu": 1500,
+                "category": "food",
+                "description": "Lunch downtown",
+            }
         }
-    }}
+    }
 
 
 class ExpenseResponse(BaseModel):
-    id:          int
-    amount_uyu:  float
-    amount_usd:  float
+    id: int
+    amount_uyu: float
+    amount_usd: float
     dollar_rate: float
-    category:    str
+    category: str
     description: Optional[str]
-    date:        str
+    date: str
 
 
 class UserRegisterRequest(BaseModel):
@@ -90,14 +96,14 @@ class UserRegisterRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id:       int
+    id: int
     username: str
 
 
 class TokenResponse(BaseModel):
-    access_token:  str
+    access_token: str
     refresh_token: str
-    token_type:    str = "bearer"
+    token_type: str = "bearer"
 
 
 class RefreshRequest(BaseModel):
@@ -105,20 +111,21 @@ class RefreshRequest(BaseModel):
 
 
 class MonthlySummary(BaseModel):
-    month:     str
-    count:     int
+    month: str
+    count: int
     total_uyu: float
     total_usd: float
 
 
 class RateResponse(BaseModel):
-    buy:        float
-    sell:       float
-    average:    float
+    buy: float
+    sell: float
+    average: float
     updated_at: str
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
+
 
 @app.post("/auth/register", response_model=UserResponse, status_code=201, tags=["Auth"])
 def register(body: UserRegisterRequest):
@@ -150,7 +157,7 @@ def login(form: OAuth2PasswordRequestForm = Depends()):
             status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
     return {
-        "access_token":  auth.create_access_token(user["username"]),
+        "access_token": auth.create_access_token(user["username"]),
         "refresh_token": auth.create_refresh_token(user["username"]),
     }
 
@@ -166,12 +173,13 @@ def refresh(body: RefreshRequest):
             detail="User not found or inactive",
         )
     return {
-        "access_token":  auth.create_access_token(username),
+        "access_token": auth.create_access_token(username),
         "refresh_token": auth.create_refresh_token(username),
     }
 
 
 # ── Dollar ────────────────────────────────────────────────────────────────────
+
 
 @app.get("/dollar", response_model=RateResponse, tags=["Dollar"])
 def current_rate():
@@ -191,6 +199,7 @@ def current_rate():
 
 
 # ── Expenses ──────────────────────────────────────────────────────────────────
+
 
 @app.post(
     "/expenses",
@@ -225,12 +234,12 @@ def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_u
             )
 
     return db.create_expense(
-        amount_uyu  = expense.amount_uyu,
-        amount_usd  = round(expense.amount_uyu / rate.buy, 2),
-        dollar_rate = rate.sell,
-        category    = expense.category,
-        description = expense.description,
-        date        = date,
+        amount_uyu=expense.amount_uyu,
+        amount_usd=round(expense.amount_uyu / rate.buy, 2),
+        dollar_rate=rate.sell,
+        category=expense.category,
+        description=expense.description,
+        date=date,
     )
 
 
@@ -263,6 +272,7 @@ def delete_expense(expense_id: int, _: dict = Depends(auth.get_current_user)):
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
+
 @app.get("/summary/{month}", response_model=MonthlySummary, tags=["Summary"])
 def monthly_summary(month: str, _: dict = Depends(auth.get_current_user)):
     """Returns total expenses for a given month in UYU and USD. Format: YYYY-MM"""
@@ -274,7 +284,9 @@ def summary_by_category(month: str, _: dict = Depends(auth.get_current_user)):
     """Returns monthly totals broken down by category."""
     return db.summary_by_category(month=month)
 
+
 # ── Health ───────────────────────────────────────────────────────────────────
+
 
 @app.get("/health", tags=["Health"])
 def health():

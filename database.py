@@ -18,7 +18,7 @@ from pathlib import Path
 # Locally, we fall back to SQLite so you don't need to install anything extra.
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-USE_POSTGRES  = DATABASE_URL is not None
+USE_POSTGRES = DATABASE_URL is not None
 
 if USE_POSTGRES:
     import psycopg2
@@ -28,6 +28,7 @@ else:
 
 
 # ── Connection ────────────────────────────────────────────────────────────────
+
 
 def get_connection():
     if USE_POSTGRES:
@@ -55,6 +56,7 @@ def _row_to_dict(row) -> dict:
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
+
 
 def init_db():
     """Creates the users and expenses tables if they don't exist."""
@@ -107,6 +109,7 @@ def init_db():
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 
+
 def create_user(username: str, hashed_password: str) -> dict:
     p = _placeholder()
     if USE_POSTGRES:
@@ -136,17 +139,13 @@ def get_user_by_username(username: str) -> dict | None:
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(
-                    f"SELECT * FROM users WHERE username = {p}", 
-                    (username,)
-                )
+                cur.execute(f"SELECT * FROM users WHERE username = {p}", (username,))
                 row = cur.fetchone()
         return dict(row) if row else None
     else:
         with get_connection() as conn:
             row = conn.execute(
-                f"SELECT * FROM users WHERE username = {p}", 
-                (username,)
+                f"SELECT * FROM users WHERE username = {p}", (username,)
             ).fetchone()
         return dict(row) if row else None
 
@@ -162,21 +161,21 @@ def get_user_by_id(user_id: int) -> dict | None:
     else:
         with get_connection() as conn:
             row = conn.execute(
-                f"SELECT * FROM users WHERE id = {p}", 
-                (user_id,)
+                f"SELECT * FROM users WHERE id = {p}", (user_id,)
             ).fetchone()
         return dict(row) if row else None
 
 
 # ── Expenses CRUD ─────────────────────────────────────────────────────────────
 
+
 def create_expense(
-    amount_uyu:  float,
-    amount_usd:  float,
+    amount_uyu: float,
+    amount_usd: float,
     dollar_rate: float,
-    category:    str,
+    category: str,
     description: str | None = None,
-    date:        datetime | None = None,
+    date: datetime | None = None,
 ) -> dict:
     date_val = date or datetime.now()
     p = _placeholder()
@@ -194,8 +193,12 @@ def create_expense(
                     RETURNING *
                     """,
                     (
-                        amount_uyu, amount_usd, dollar_rate,
-                        category, description, date_val,
+                        amount_uyu,
+                        amount_usd,
+                        dollar_rate,
+                        category,
+                        description,
+                        date_val,
                     ),
                 )
                 row = cur.fetchone()
@@ -212,8 +215,12 @@ def create_expense(
                 VALUES ({p}, {p}, {p}, {p}, {p}, {p})
                 """,
                 (
-                    amount_uyu, amount_usd, dollar_rate,
-                    category, description, date_val.isoformat(),
+                    amount_uyu,
+                    amount_usd,
+                    dollar_rate,
+                    category,
+                    description,
+                    date_val.isoformat(),
                 ),
             )
             conn.commit()
@@ -395,6 +402,7 @@ def delete_expense(expense_id: int) -> bool:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _serialize(row: dict) -> dict:
     """Converts non-JSON-serializable types (e.g. datetime) to strings."""

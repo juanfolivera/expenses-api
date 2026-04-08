@@ -21,6 +21,7 @@ import database as db
 
 # ── Password hashing ──────────────────────────────────────────────────────────
 
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -62,8 +63,9 @@ def create_refresh_token(username: str) -> str:
 def decode_token(token: str, expected_type: str) -> str:
     """Decodes and validates a JWT. Returns the username or raises 401."""
     try:
-        payload = jwt.decode(token, config.JWT_SECRET_KEY, 
-                             algorithms=[config.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM]
+        )
     except JWTError:
         raise _CREDENTIALS_ERROR
 
@@ -78,6 +80,7 @@ def decode_token(token: str, expected_type: str) -> str:
 
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
+
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """Dependency that validates the access token and returns the current user."""
