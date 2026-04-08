@@ -11,25 +11,23 @@ Token strategy:
 
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 import config
 import database as db
 
 # ── Password hashing ──────────────────────────────────────────────────────────
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
@@ -65,7 +63,9 @@ def create_refresh_token(username: str) -> str:
 def decode_token(token: str, expected_type: str) -> str:
     """Decodes and validates a JWT. Returns the username or raises 401."""
     try:
-        payload = jwt.decode(token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, config.JWT_SECRET_KEY, algorithms=[config.JWT_ALGORITHM]
+        )
     except JWTError:
         raise _CREDENTIALS_ERROR
 
@@ -80,6 +80,7 @@ def decode_token(token: str, expected_type: str) -> str:
 
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
+
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """Dependency that validates the access token and returns the current user."""

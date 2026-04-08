@@ -18,7 +18,7 @@ from pathlib import Path
 # Locally, we fall back to SQLite so you don't need to install anything extra.
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-USE_POSTGRES  = DATABASE_URL is not None
+USE_POSTGRES = DATABASE_URL is not None
 
 if USE_POSTGRES:
     import psycopg2
@@ -28,6 +28,7 @@ else:
 
 
 # ── Connection ────────────────────────────────────────────────────────────────
+
 
 def get_connection():
     if USE_POSTGRES:
@@ -55,6 +56,7 @@ def _row_to_dict(row) -> dict:
 
 
 # ── Schema ────────────────────────────────────────────────────────────────────
+
 
 def init_db():
     """Creates the users and expenses tables if they don't exist."""
@@ -107,13 +109,16 @@ def init_db():
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 
+
 def create_user(username: str, hashed_password: str) -> dict:
     p = _placeholder()
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
-                    f"INSERT INTO users (username, hashed_password) VALUES ({p}, {p}) RETURNING id, username, is_active",
+                    f"INSERT INTO users (username, hashed_password)"
+                    f" VALUES ({p}, {p})"
+                    f" RETURNING id, username, is_active",
                     (username, hashed_password),
                 )
                 row = cur.fetchone()
@@ -139,7 +144,9 @@ def get_user_by_username(username: str) -> dict | None:
         return dict(row) if row else None
     else:
         with get_connection() as conn:
-            row = conn.execute(f"SELECT * FROM users WHERE username = {p}", (username,)).fetchone()
+            row = conn.execute(
+                f"SELECT * FROM users WHERE username = {p}", (username,)
+            ).fetchone()
         return dict(row) if row else None
 
 
@@ -153,19 +160,22 @@ def get_user_by_id(user_id: int) -> dict | None:
         return dict(row) if row else None
     else:
         with get_connection() as conn:
-            row = conn.execute(f"SELECT * FROM users WHERE id = {p}", (user_id,)).fetchone()
+            row = conn.execute(
+                f"SELECT * FROM users WHERE id = {p}", (user_id,)
+            ).fetchone()
         return dict(row) if row else None
 
 
 # ── Expenses CRUD ─────────────────────────────────────────────────────────────
 
+
 def create_expense(
-    amount_uyu:  float,
-    amount_usd:  float,
+    amount_uyu: float,
+    amount_usd: float,
     dollar_rate: float,
-    category:    str,
+    category: str,
     description: str | None = None,
-    date:        datetime | None = None,
+    date: datetime | None = None,
 ) -> dict:
     date_val = date or datetime.now()
     p = _placeholder()
@@ -175,11 +185,21 @@ def create_expense(
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     f"""
-                    INSERT INTO expenses (amount_uyu, amount_usd, dollar_rate, category, description, date)
+                    INSERT INTO expenses (
+                        amount_uyu, amount_usd, dollar_rate,
+                        category, description, date
+                    )
                     VALUES ({p}, {p}, {p}, {p}, {p}, {p})
                     RETURNING *
                     """,
-                    (amount_uyu, amount_usd, dollar_rate, category, description, date_val),
+                    (
+                        amount_uyu,
+                        amount_usd,
+                        dollar_rate,
+                        category,
+                        description,
+                        date_val,
+                    ),
                 )
                 row = cur.fetchone()
             conn.commit()
@@ -188,10 +208,20 @@ def create_expense(
         with get_connection() as conn:
             cursor = conn.execute(
                 f"""
-                INSERT INTO expenses (amount_uyu, amount_usd, dollar_rate, category, description, date)
+                INSERT INTO expenses (
+                    amount_uyu, amount_usd, dollar_rate,
+                    category, description, date
+                )
                 VALUES ({p}, {p}, {p}, {p}, {p}, {p})
                 """,
-                (amount_uyu, amount_usd, dollar_rate, category, description, date_val.isoformat()),
+                (
+                    amount_uyu,
+                    amount_usd,
+                    dollar_rate,
+                    category,
+                    description,
+                    date_val.isoformat(),
+                ),
             )
             conn.commit()
             return get_expense(cursor.lastrowid)
@@ -207,7 +237,10 @@ def get_expense(expense_id: int) -> dict | None:
         return _serialize(dict(row)) if row else None
     else:
         with get_connection() as conn:
-            row = conn.execute(f"SELECT * FROM expenses WHERE id = {p}", (expense_id,)).fetchone()
+            row = conn.execute(
+                f"SELECT * FROM expenses WHERE id = {p}",
+                (expense_id,),
+            ).fetchone()
         return dict(row) if row else None
 
 
@@ -223,7 +256,9 @@ def list_expenses(month: str | None = None) -> list[dict]:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 if month:
                     cur.execute(
-                        "SELECT * FROM expenses WHERE to_char(date, 'YYYY-MM') = %s ORDER BY date DESC",
+                        "SELECT * FROM expenses"
+                        " WHERE to_char(date, 'YYYY-MM') = %s"
+                        " ORDER BY date DESC",
                         (month,),
                     )
                 else:
@@ -234,11 +269,15 @@ def list_expenses(month: str | None = None) -> list[dict]:
         with get_connection() as conn:
             if month:
                 rows = conn.execute(
-                    "SELECT * FROM expenses WHERE strftime('%Y-%m', date) = ? ORDER BY date DESC",
+                    "SELECT * FROM expenses"
+                    " WHERE strftime('%Y-%m', date) = ?"
+                    " ORDER BY date DESC",
                     (month,),
                 ).fetchall()
             else:
-                rows = conn.execute("SELECT * FROM expenses ORDER BY date DESC").fetchall()
+                rows = conn.execute(
+                    "SELECT * FROM expenses ORDER BY date DESC"
+                ).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -261,7 +300,8 @@ def monthly_summary(month: str) -> dict:
                     (month,),
                 )
                 row = cur.fetchone()
-        return dict(row) if row else {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        _empty = {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        return dict(row) if row else _empty
     else:
         with get_connection() as conn:
             row = conn.execute(
@@ -277,7 +317,8 @@ def monthly_summary(month: str) -> dict:
                 """,
                 (month,),
             ).fetchone()
-        return dict(row) if row else {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        _empty = {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
+        return dict(row) if row else _empty
 
 
 def summary_by_category(month: str | None = None) -> list[dict]:
@@ -361,6 +402,7 @@ def delete_expense(expense_id: int) -> bool:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _serialize(row: dict) -> dict:
     """Converts non-JSON-serializable types (e.g. datetime) to strings."""

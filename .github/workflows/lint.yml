@@ -1,0 +1,107 @@
+name: Lint
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Lint
+        id: lint
+        run: |
+          set -o pipefail
+          ruff check . 2>&1 | tee lint_output.txt
+        continue-on-error: true
+
+      - name: Format check
+        id: format
+        run: |
+          set -o pipefail
+          ruff format --check . 2>&1 | tee format_output.txt
+        continue-on-error: true
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const lintOutput = fs.readFileSync('lint_output.txt', 'utf8').trim();
+            const formatOutput = fs.readFileSync('format_output.txt', 'utf8').trim();
+
+            const hasLintErrors = '${{ steps.lint.outcome }}' === 'failure';
+            const hasFormatErrors = '${{ steps.format.outcome }}' === 'failure';
+
+            const MARKER = '<!-- ruff-lint-comment -->';
+
+            if (!hasLintErrors && !hasFormatErrors) {
+              // Delete existing comment if all checks pass now
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              });
+              const existing = comments.find(c => c.body.includes(MARKER));
+              if (existing) {
+                await github.rest.issues.deleteComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                });
+              }
+              return;
+            }
+
+            let body = `${MARKER}\n## Ruff found errors\n\n`;
+
+            if (hasLintErrors) {
+              body += `### Lint\n\`\`\`\n${lintOutput}\n\`\`\`\n\n`;
+            }
+            if (hasFormatErrors) {
+              body += `### Format\n\`\`\`\n${formatOutput}\n\`\`\`\n`;
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if errors
+        if: steps.lint.outcome == 'failure' || steps.format.outcome == 'failure'
+        run: exit 1
