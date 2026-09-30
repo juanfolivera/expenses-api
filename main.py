@@ -12,11 +12,13 @@ from typing import Optional
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.middleware.sessions import SessionMiddleware
 
 import auth
 import config
 import database as db
 import dolar_uy
+import web
 
 # Validate config at startup — catches missing prod variables early
 config.validate()
@@ -41,6 +43,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Signed session cookie for the website (the JSON API keeps using JWTs)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SESSION_SECRET_KEY,
+    session_cookie="expenses_session",
+    max_age=config.SESSION_MAX_AGE_DAYS * 24 * 60 * 60,
+    same_site="lax",
+    https_only=config.IS_PROD,
+)
+
+app.include_router(web.router)
 
 db.init_db()
 

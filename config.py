@@ -17,6 +17,8 @@ Environment reference:
   JWT_SECRET_KEY     Secret key used to sign JWT tokens. MUST be set in production.
   ACCESS_TOKEN_EXPIRE_MINUTES   Access token lifetime in minutes (default: 30)
   REFRESH_TOKEN_EXPIRE_DAYS     Refresh token lifetime in days (default: 30)
+  SESSION_SECRET_KEY Signs the website session cookie (default: JWT_SECRET_KEY)
+  SESSION_MAX_AGE_DAYS          Website login lifetime in days (default: 7)
 """
 
 import os
@@ -71,6 +73,13 @@ JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-producti
 JWT_ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+
+# ── Website sessions ──────────────────────────────────────────────────────────
+
+# Signs the website's session cookie. Falls back to JWT_SECRET_KEY so no extra
+# production variable is required.
+SESSION_SECRET_KEY: str = os.getenv("SESSION_SECRET_KEY", JWT_SECRET_KEY)
+SESSION_MAX_AGE_DAYS: int = int(os.getenv("SESSION_MAX_AGE_DAYS", "7"))
 
 # ── Validation ────────────────────────────────────────────────────────────────
 

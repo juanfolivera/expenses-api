@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css"
+    />
+    <style>
+      .amount { text-align: right; font-variant-numeric: tabular-nums; }
+      .muted { color: var(--pico-muted-color); }
+      .summary { display: flex; flex-wrap: wrap; gap: 1rem; }
+      .summary article { flex: 1 1 12rem; margin: 0; }
+      .summary strong { display: block; font-size: 1.5rem; }
+      .filter { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+      .filter input, .filter button { width: auto; margin: 0; }
+      nav details.dropdown form { margin: 0; }
+      nav details.dropdown button { width: 100%; margin: 0; }
+    </style>
+  </head>
+  <body>
+    {% block body %}{% endblock %}
+  </body>
+</html>

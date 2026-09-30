@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block body %}
+<header class="container">
+  <nav>
+    <ul>
+      <li><strong>{{ app_name }}</strong></li>
+    </ul>
+    <ul>
+      <li>
+        <details class="dropdown">
+          <summary>{{ user.username }}</summary>
+          <ul dir="rtl">
+            <li>
+              <form method="post" action="/logout">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit" class="secondary outline">Log out</button>
+              </form>
+            </li>
+          </ul>
+        </details>
+      </li>
+    </ul>
+  </nav>
+</header>
+
+<main class="container">
+  <hgroup>
+    <h2>{{ month_label or "All expenses" }}</h2>
+    <p>{{ expenses | length }} expense{{ "" if expenses | length == 1 else "s" }}</p>
+  </hgroup>
+
+  <section class="summary">
+    <article>
+      <span class="muted">Total (UYU)</span>
+      <strong>$ {{ total_uyu | money }}</strong>
+    </article>
+    <article>
+      <span class="muted">Total (USD)</span>
+      <strong>US$ {{ total_usd | money }}</strong>
+    </article>
+  </section>
+
+  <form method="get" action="/" class="filter" style="margin-block: 2rem 1rem">
+    <label for="month">Month</label>
+    <input type="month" id="month" name="month" value="{{ month or '' }}" />
+    <button type="submit" class="secondary">Filter</button>
+    {% if month %}<a href="/">Show all</a>{% endif %}
+  </form>
+
+  {% if expenses %}
+  <div class="overflow-auto">
+    <table class="striped">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Category</th>
+          <th>Description</th>
+          <th class="amount">UYU</th>
+          <th class="amount">USD</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in expenses %}
+        <tr>
+          <td>{{ e.date[:10] }}</td>
+          <td>{{ e.category | capitalize }}</td>
+          <td>{{ e.description or "" }}</td>
+          <td class="amount">{{ e.amount_uyu | money }}</td>
+          <td class="amount">{{ e.amount_usd | money }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">
+    No expenses {{ "for " ~ month_label if month_label else "yet" }}.
+  </p>
+  {% endif %}
+</main>
+{% endblock %}

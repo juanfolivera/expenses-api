@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Log in · {{ app_name }}{% endblock %}
+
+{% block body %}
+<main class="container" style="max-width: 26rem; padding-top: 10vh">
+  <article>
+    <header>
+      <h2 style="margin: 0">{{ app_name }}</h2>
+      <p class="muted" style="margin: 0">Log in to see your expenses</p>
+    </header>
+
+    {% if error %}
+    <p role="alert" style="color: var(--pico-del-color)">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label>
+        Username
+        <input name="username" autocomplete="username" required autofocus />
+      </label>
+      <label>
+        Password
+        <input
+          type="password"
+          name="password"
+          autocomplete="current-password"
+          required
+        />
+      </label>
+      <button type="submit">Log in</button>
+    </form>
+  </article>
+</main>
+{% endblock %}
