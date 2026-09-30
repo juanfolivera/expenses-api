@@ -182,6 +182,12 @@ def refresh(body: RefreshRequest):
     }
 
 
+@app.get("/auth/me", response_model=UserResponse, tags=["Auth"])
+def me(user: dict = Depends(auth.get_current_user)):
+    """Returns the currently authenticated user."""
+    return user
+
+
 # ── Dollar ────────────────────────────────────────────────────────────────────
 
 
