@@ -14,6 +14,9 @@ Environment reference:
                      (default: * in dev, must be set explicitly in prod)
   APP_NAME           Display name for the API (default: "Expenses API")
   DOLLAR_CACHE_TTL   Seconds to cache the exchange rate (default: 300)
+  JWT_SECRET_KEY     Secret key used to sign JWT tokens. MUST be set in production.
+  ACCESS_TOKEN_EXPIRE_MINUTES   Access token lifetime in minutes (default: 30)
+  REFRESH_TOKEN_EXPIRE_DAYS     Refresh token lifetime in days (default: 30)
 """
 
 import os
@@ -22,6 +25,7 @@ from pathlib import Path
 # Load .env file if it exists (only relevant locally — Railway sets vars natively)
 try:
     from dotenv import load_dotenv
+
     load_dotenv(Path(__file__).parent / ".env")
 except ImportError:
     pass  # python-dotenv not installed — that's fine in production
@@ -29,9 +33,9 @@ except ImportError:
 
 # ── Core ──────────────────────────────────────────────────────────────────────
 
-ENVIRONMENT:  str = os.getenv("ENVIRONMENT", "development")
-IS_PROD:      bool = ENVIRONMENT == "production"
-IS_DEV:       bool = not IS_PROD
+ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+IS_PROD: bool = ENVIRONMENT == "production"
+IS_DEV: bool = not IS_PROD
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
@@ -49,6 +53,7 @@ DOLLAR_CACHE_TTL: int = int(os.getenv("DOLLAR_CACHE_TTL", "300"))  # seconds
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 
+
 def _parse_origins() -> list[str]:
     raw = os.getenv("ALLOWED_ORIGINS", "")
     if raw.strip():
@@ -57,9 +62,18 @@ def _parse_origins() -> list[str]:
     # Prod default: restrictive — forces you to set ALLOWED_ORIGINS explicitly
     return ["*"] if IS_DEV else []
 
+
 ALLOWED_ORIGINS: list[str] = _parse_origins()
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "dev-secret-change-in-production")
+JWT_ALGORITHM: str = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+
 # ── Validation ────────────────────────────────────────────────────────────────
+
 
 def validate():
     """
@@ -77,13 +91,18 @@ def validate():
             "Set it to your app's URL, e.g. 'https://myapp.com'"
         )
 
+    if IS_PROD and JWT_SECRET_KEY == "dev-secret-change-in-production":
+        errors.append("JWT_SECRET_KEY must be set to a strong secret in production.")
+
     if errors:
         raise EnvironmentError(
-            "Invalid configuration for production environment:\n" +
-            "\n".join(f"  - {e}" for e in errors)
+            "Invalid configuration for production environment:\n"
+            + "\n".join(f"  - {e}" for e in errors)
         )
 
+
 # ── Debug summary ─────────────────────────────────────────────────────────────
+
 
 def print_config():
     """Prints the current configuration at startup (only in dev mode)."""
@@ -91,11 +110,13 @@ def print_config():
         return
     db_info = DATABASE_URL[:30] + "..." if DATABASE_URL else "SQLite (local)"
     print(f"""
-┌─ Config ({'PRODUCTION' if IS_PROD else 'DEVELOPMENT'}) {'─' * 30}
+┌─ Config ({"PRODUCTION" if IS_PROD else "DEVELOPMENT"}) {"─" * 30}
 │  App name      : {APP_NAME}
 │  Debug         : {DEBUG}
 │  Database      : {db_info}
 │  CORS origins  : {ALLOWED_ORIGINS}
 │  Rate cache TTL: {DOLLAR_CACHE_TTL}s
-└{'─' * 50}
+│  Access token  : {ACCESS_TOKEN_EXPIRE_MINUTES}min
+│  Refresh token : {REFRESH_TOKEN_EXPIRE_DAYS}d
+└{"─" * 50}
 """)

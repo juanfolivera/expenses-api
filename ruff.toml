@@ -1,0 +1,9 @@
+target-version = "py312"
+
+exclude = ["venv"]
+
+[lint]
+select = ["E", "F", "I"]  # pycodestyle errors, pyflakes, isort
+
+[format]
+quote-style = "double"
