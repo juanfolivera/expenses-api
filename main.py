@@ -11,7 +11,6 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
 import auth
@@ -90,6 +89,11 @@ class ExpenseResponse(BaseModel):
     date: str
 
 
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
 class UserRegisterRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=8)
@@ -140,13 +144,13 @@ def register(body: UserRegisterRequest):
 
 
 @app.post("/auth/login", response_model=TokenResponse, tags=["Auth"])
-def login(form: OAuth2PasswordRequestForm = Depends()):
+def login(body: LoginRequest):
     """
     Authenticates with username and password (form data).
     Returns a short-lived access token and a long-lived refresh token.
     """
-    user = db.get_user_by_username(form.username)
-    if not user or not auth.verify_password(form.password, user["hashed_password"]):
+    user = db.get_user_by_username(body.username)
+    if not user or not auth.verify_password(body.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -207,7 +211,9 @@ def current_rate():
     status_code=201,
     tags=["Expenses"],
 )
-def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_user)):
+def create_expense(
+    expense: ExpenseRequest, user: dict = Depends(auth.get_current_user)
+):
     """
     Records a new expense. Automatically fetches the current exchange rate
     and stores the USD equivalent alongside the rate used.
@@ -234,6 +240,7 @@ def create_expense(expense: ExpenseRequest, _: dict = Depends(auth.get_current_u
             )
 
     return db.create_expense(
+        user_id=user["id"],
         amount_uyu=expense.amount_uyu,
         amount_usd=round(expense.amount_uyu / rate.buy, 2),
         dollar_rate=rate.sell,
@@ -248,25 +255,25 @@ def list_expenses(
     month: Optional[str] = Query(
         None, description="Filter by month, format YYYY-MM. E.g. 2026-05"
     ),
-    _: dict = Depends(auth.get_current_user),
+    user: dict = Depends(auth.get_current_user),
 ):
-    """Lists all expenses, optionally filtered by month."""
-    return db.list_expenses(month=month)
+    """Lists the current user's expenses, optionally filtered by month."""
+    return db.list_expenses(user["id"], month=month)
 
 
 @app.get("/expenses/{expense_id}", response_model=ExpenseResponse, tags=["Expenses"])
-def get_expense(expense_id: int, _: dict = Depends(auth.get_current_user)):
+def get_expense(expense_id: int, user: dict = Depends(auth.get_current_user)):
     """Returns a single expense by ID."""
-    expense = db.get_expense(expense_id)
+    expense = db.get_expense(expense_id, user["id"])
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     return expense
 
 
 @app.delete("/expenses/{expense_id}", status_code=204, tags=["Expenses"])
-def delete_expense(expense_id: int, _: dict = Depends(auth.get_current_user)):
+def delete_expense(expense_id: int, user: dict = Depends(auth.get_current_user)):
     """Deletes an expense by ID."""
-    if not db.delete_expense(expense_id):
+    if not db.delete_expense(expense_id, user["id"]):
         raise HTTPException(status_code=404, detail="Expense not found")
 
 
@@ -274,15 +281,15 @@ def delete_expense(expense_id: int, _: dict = Depends(auth.get_current_user)):
 
 
 @app.get("/summary/{month}", response_model=MonthlySummary, tags=["Summary"])
-def monthly_summary(month: str, _: dict = Depends(auth.get_current_user)):
+def monthly_summary(month: str, user: dict = Depends(auth.get_current_user)):
     """Returns total expenses for a given month in UYU and USD. Format: YYYY-MM"""
-    return db.monthly_summary(month)
+    return db.monthly_summary(user["id"], month)
 
 
 @app.get("/summary/{month}/categories", tags=["Summary"])
-def summary_by_category(month: str, _: dict = Depends(auth.get_current_user)):
+def summary_by_category(month: str, user: dict = Depends(auth.get_current_user)):
     """Returns monthly totals broken down by category."""
-    return db.summary_by_category(month=month)
+    return db.summary_by_category(user["id"], month=month)
 
 
 # ── Health ───────────────────────────────────────────────────────────────────

@@ -74,6 +74,7 @@ def init_db():
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS expenses (
                         id          SERIAL PRIMARY KEY,
+                        user_id     INTEGER     REFERENCES users(id) ON DELETE CASCADE,
                         amount_uyu  REAL        NOT NULL,
                         amount_usd  REAL        NOT NULL,
                         dollar_rate REAL        NOT NULL,
@@ -82,6 +83,15 @@ def init_db():
                         date        TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )
                 """)
+                # Migrate tables created before expenses were scoped per user
+                cur.execute("""
+                    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS
+                        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_expenses_user_id"
+                    " ON expenses (user_id)"
+                )
             conn.commit()
     else:
         with get_connection() as conn:
@@ -96,6 +106,7 @@ def init_db():
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS expenses (
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
                     amount_uyu  REAL NOT NULL,
                     amount_usd  REAL NOT NULL,
                     dollar_rate REAL NOT NULL,
@@ -104,6 +115,16 @@ def init_db():
                     date        TEXT NOT NULL
                 )
             """)
+            # Migrate tables created before expenses were scoped per user
+            columns = [r["name"] for r in conn.execute("PRAGMA table_info(expenses)")]
+            if "user_id" not in columns:
+                conn.execute(
+                    "ALTER TABLE expenses ADD COLUMN"
+                    " user_id INTEGER REFERENCES users(id) ON DELETE CASCADE"
+                )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses (user_id)"
+            )
             conn.commit()
 
 
@@ -170,6 +191,7 @@ def get_user_by_id(user_id: int) -> dict | None:
 
 
 def create_expense(
+    user_id: int,
     amount_uyu: float,
     amount_usd: float,
     dollar_rate: float,
@@ -186,13 +208,14 @@ def create_expense(
                 cur.execute(
                     f"""
                     INSERT INTO expenses (
-                        amount_uyu, amount_usd, dollar_rate,
+                        user_id, amount_uyu, amount_usd, dollar_rate,
                         category, description, date
                     )
-                    VALUES ({p}, {p}, {p}, {p}, {p}, {p})
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
                     RETURNING *
                     """,
                     (
+                        user_id,
                         amount_uyu,
                         amount_usd,
                         dollar_rate,
@@ -209,12 +232,13 @@ def create_expense(
             cursor = conn.execute(
                 f"""
                 INSERT INTO expenses (
-                    amount_uyu, amount_usd, dollar_rate,
+                    user_id, amount_uyu, amount_usd, dollar_rate,
                     category, description, date
                 )
-                VALUES ({p}, {p}, {p}, {p}, {p}, {p})
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
                 """,
                 (
+                    user_id,
                     amount_uyu,
                     amount_usd,
                     dollar_rate,
@@ -224,29 +248,32 @@ def create_expense(
                 ),
             )
             conn.commit()
-            return get_expense(cursor.lastrowid)
+            return get_expense(cursor.lastrowid, user_id)
 
 
-def get_expense(expense_id: int) -> dict | None:
+def get_expense(expense_id: int, user_id: int) -> dict | None:
     p = _placeholder()
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(f"SELECT * FROM expenses WHERE id = {p}", (expense_id,))
+                cur.execute(
+                    f"SELECT * FROM expenses WHERE id = {p} AND user_id = {p}",
+                    (expense_id, user_id),
+                )
                 row = cur.fetchone()
         return _serialize(dict(row)) if row else None
     else:
         with get_connection() as conn:
             row = conn.execute(
-                f"SELECT * FROM expenses WHERE id = {p}",
-                (expense_id,),
+                f"SELECT * FROM expenses WHERE id = {p} AND user_id = {p}",
+                (expense_id, user_id),
             ).fetchone()
         return dict(row) if row else None
 
 
-def list_expenses(month: str | None = None) -> list[dict]:
+def list_expenses(user_id: int, month: str | None = None) -> list[dict]:
     """
-    Lists all expenses, optionally filtered by month.
+    Lists a user's expenses, optionally filtered by month.
 
     Args:
         month: format 'YYYY-MM', e.g. '2026-05'
@@ -257,12 +284,15 @@ def list_expenses(month: str | None = None) -> list[dict]:
                 if month:
                     cur.execute(
                         "SELECT * FROM expenses"
-                        " WHERE to_char(date, 'YYYY-MM') = %s"
+                        " WHERE user_id = %s AND to_char(date, 'YYYY-MM') = %s"
                         " ORDER BY date DESC",
-                        (month,),
+                        (user_id, month),
                     )
                 else:
-                    cur.execute("SELECT * FROM expenses ORDER BY date DESC")
+                    cur.execute(
+                        "SELECT * FROM expenses WHERE user_id = %s ORDER BY date DESC",
+                        (user_id,),
+                    )
                 rows = cur.fetchall()
         return [_serialize(dict(r)) for r in rows]
     else:
@@ -270,18 +300,19 @@ def list_expenses(month: str | None = None) -> list[dict]:
             if month:
                 rows = conn.execute(
                     "SELECT * FROM expenses"
-                    " WHERE strftime('%Y-%m', date) = ?"
+                    " WHERE user_id = ? AND strftime('%Y-%m', date) = ?"
                     " ORDER BY date DESC",
-                    (month,),
+                    (user_id, month),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    "SELECT * FROM expenses ORDER BY date DESC"
+                    "SELECT * FROM expenses WHERE user_id = ? ORDER BY date DESC",
+                    (user_id,),
                 ).fetchall()
         return [dict(r) for r in rows]
 
 
-def monthly_summary(month: str) -> dict:
+def monthly_summary(user_id: int, month: str) -> dict:
     """Returns totals in UYU and USD for a given month (format 'YYYY-MM')."""
     if USE_POSTGRES:
         with get_connection() as conn:
@@ -294,10 +325,10 @@ def monthly_summary(month: str) -> dict:
                         ROUND(SUM(amount_uyu)::numeric, 2) AS total_uyu,
                         ROUND(SUM(amount_usd)::numeric, 2) AS total_usd
                     FROM expenses
-                    WHERE to_char(date, 'YYYY-MM') = %s
+                    WHERE user_id = %s AND to_char(date, 'YYYY-MM') = %s
                     GROUP BY to_char(date, 'YYYY-MM')
                     """,
-                    (month,),
+                    (user_id, month),
                 )
                 row = cur.fetchone()
         _empty = {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
@@ -312,17 +343,17 @@ def monthly_summary(month: str) -> dict:
                     ROUND(SUM(amount_uyu), 2) AS total_uyu,
                     ROUND(SUM(amount_usd), 2) AS total_usd
                 FROM expenses
-                WHERE strftime('%Y-%m', date) = ?
+                WHERE user_id = ? AND strftime('%Y-%m', date) = ?
                 GROUP BY month
                 """,
-                (month,),
+                (user_id, month),
             ).fetchone()
         _empty = {"month": month, "count": 0, "total_uyu": 0.0, "total_usd": 0.0}
         return dict(row) if row else _empty
 
 
-def summary_by_category(month: str | None = None) -> list[dict]:
-    """Totals grouped by category, optionally filtered by month."""
+def summary_by_category(user_id: int, month: str | None = None) -> list[dict]:
+    """A user's totals grouped by category, optionally filtered by month."""
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -335,10 +366,10 @@ def summary_by_category(month: str | None = None) -> list[dict]:
                             ROUND(SUM(amount_uyu)::numeric, 2) AS total_uyu,
                             ROUND(SUM(amount_usd)::numeric, 2) AS total_usd
                         FROM expenses
-                        WHERE to_char(date, 'YYYY-MM') = %s
+                        WHERE user_id = %s AND to_char(date, 'YYYY-MM') = %s
                         GROUP BY category ORDER BY total_uyu DESC
                         """,
-                        (month,),
+                        (user_id, month),
                     )
                 else:
                     cur.execute(
@@ -349,8 +380,10 @@ def summary_by_category(month: str | None = None) -> list[dict]:
                             ROUND(SUM(amount_uyu)::numeric, 2) AS total_uyu,
                             ROUND(SUM(amount_usd)::numeric, 2) AS total_usd
                         FROM expenses
+                        WHERE user_id = %s
                         GROUP BY category ORDER BY total_uyu DESC
-                        """
+                        """,
+                        (user_id,),
                     )
                 rows = cur.fetchall()
         return [dict(r) for r in rows]
@@ -365,10 +398,10 @@ def summary_by_category(month: str | None = None) -> list[dict]:
                         ROUND(SUM(amount_uyu), 2) AS total_uyu,
                         ROUND(SUM(amount_usd), 2) AS total_usd
                     FROM expenses
-                    WHERE strftime('%Y-%m', date) = ?
+                    WHERE user_id = ? AND strftime('%Y-%m', date) = ?
                     GROUP BY category ORDER BY total_uyu DESC
                     """,
-                    (month,),
+                    (user_id, month),
                 ).fetchall()
             else:
                 rows = conn.execute(
@@ -377,26 +410,34 @@ def summary_by_category(month: str | None = None) -> list[dict]:
                         category,
                         COUNT(*)                  AS count,
                         ROUND(SUM(amount_uyu), 2) AS total_uyu,
-                        ROUND(SUM(amount_usd)::numeric, 2) AS total_usd
+                        ROUND(SUM(amount_usd), 2) AS total_usd
                     FROM expenses
+                    WHERE user_id = ?
                     GROUP BY category ORDER BY total_uyu DESC
-                    """
+                    """,
+                    (user_id,),
                 ).fetchall()
         return [dict(r) for r in rows]
 
 
-def delete_expense(expense_id: int) -> bool:
+def delete_expense(expense_id: int, user_id: int) -> bool:
     p = _placeholder()
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"DELETE FROM expenses WHERE id = {p}", (expense_id,))
+                cur.execute(
+                    f"DELETE FROM expenses WHERE id = {p} AND user_id = {p}",
+                    (expense_id, user_id),
+                )
                 deleted = cur.rowcount > 0
             conn.commit()
         return deleted
     else:
         with get_connection() as conn:
-            cursor = conn.execute(f"DELETE FROM expenses WHERE id = {p}", (expense_id,))
+            cursor = conn.execute(
+                f"DELETE FROM expenses WHERE id = {p} AND user_id = {p}",
+                (expense_id, user_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 
