@@ -153,6 +153,16 @@ Your API will be live at `https://your-project.up.railway.app`
 | GET | `/summary/2026-05` | Monthly total in UYU and USD |
 | GET | `/summary/2026-05/categories` | Breakdown by category |
 
+### Incomes (requires token)
+
+| Method | URL | Description |
+|---|---|---|
+| POST | `/incomes` | Record a new income (e.g. salary) |
+| GET | `/incomes` | List all incomes |
+| GET | `/incomes?month=2026-05` | Filter by month |
+| GET | `/incomes/{id}` | Get a single income |
+| DELETE | `/incomes/{id}` | Delete an income |
+
 ### Other (public)
 
 | Method | URL | Description |
@@ -168,6 +178,10 @@ Authorization: Bearer <access_token>
 ## Categories
 
 `food` · `transport` · `health` · `entertainment` · `clothing` · `home` · `education` · `other`
+
+## Income sources
+
+`salary` · `freelance` · `investment` · `gift` · `other`
 
 ---
 
@@ -192,6 +206,12 @@ curl -X POST http://localhost:8000/expenses \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"amount_uyu": 1500, "category": "food", "description": "Lunch"}'
+
+# Record your monthly salary
+curl -X POST http://localhost:8000/incomes \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount_uyu": 85000, "source": "salary", "description": "May salary"}'
 
 # List expenses for May
 curl http://localhost:8000/expenses?month=2026-05 \
