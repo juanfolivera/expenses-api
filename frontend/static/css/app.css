@@ -1,0 +1,18 @@
+/* Custom styles on top of Bootstrap 5 */
+
+/* Line up digits in money columns */
+.amount { font-variant-numeric: tabular-nums; }
+
+/* ── Login ─────────────────────────────────────────────────────────────────── */
+
+.auth-page { max-width: 26rem; }
+
+/* ── Dashboard ─────────────────────────────────────────────────────────────── */
+
+.summary-icon { font-size: 2rem; line-height: 1; }
+
+/* Chart.js needs a sized, positioned parent to stay responsive */
+.chart-container { position: relative; height: 18rem; }
+
+/* Keep the currency picker narrow next to the amount */
+.currency-select { flex: 0 0 6rem; }

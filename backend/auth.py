@@ -19,6 +19,10 @@ from jose import JWTError, jwt
 from backend import config
 from backend import database as db
 
+# Account rules, shared by the API and the website's register form
+USERNAME_MIN, USERNAME_MAX = 3, 50
+PASSWORD_MIN = 8
+
 # ── Password hashing ──────────────────────────────────────────────────────────
 
 

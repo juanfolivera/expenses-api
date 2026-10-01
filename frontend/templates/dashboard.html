@@ -1,173 +1,518 @@
 {% extends "base.html" %}
 
-{% block body %}
-<header class="container">
-  <nav>
-    <ul>
-      <li><strong>{{ app_name }}</strong></li>
-    </ul>
-    <ul>
-      <li>
-        <details class="dropdown">
-          <summary>{{ user.username }}</summary>
-          <ul dir="rtl">
-            <li>
-              <form method="post" action="/logout">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button type="submit" class="secondary outline">Log out</button>
-              </form>
-            </li>
-          </ul>
-        </details>
-      </li>
-    </ul>
-  </nav>
-</header>
+{% set currency_prefix = {"uyu": "$", "usd": "U$S"} %}
 
-<main class="container">
+{# One amount per currency; the $ / U$S switch shows one and hides the other #}
+{% macro money_by_currency(values, field, signed=false) %}
+  {%- for currency in ["uyu", "usd"] -%}
+  {%- set value = values[currency][field] -%}
+  <span
+    data-currency="{{ currency }}"
+    {% if signed and value != 0 %}class="{{ 'text-danger' if value < 0 else 'text-success' }}"{% endif %}
+    {% if currency != "uyu" %}hidden{% endif %}
+  >{{ "-" if value < 0 }}{{ currency_prefix[currency] }} {{ value | abs | money }}</span>
+  {%- endfor -%}
+{% endmacro %}
+
+{# An entry's amount in both currencies: "+" for incomes, "-" for expenses #}
+{% macro entry_amount(entry) %}
+  {%- for currency in ["uyu", "usd"] -%}
+  <span
+    data-currency="{{ currency }}"
+    {% if entry.kind == "income" %}class="text-success"{% endif %}
+    {% if currency != "uyu" %}hidden{% endif %}
+  >{{ "+" if entry.kind == "income" else "-" }}{{ currency_prefix[currency] }} {{ entry["amount_" ~ currency] | money }}</span>
+  {%- endfor -%}
+{% endmacro %}
+
+{% block body %}
+<nav class="navbar bg-body border-bottom">
+  <div class="container">
+    <span class="navbar-brand fw-semibold">
+      <i class="bi bi-wallet2 text-primary me-1" aria-hidden="true"></i>
+      {{ app_name }}
+    </span>
+    <div class="dropdown">
+      <button
+        class="btn btn-link link-body-emphasis text-decoration-none dropdown-toggle"
+        type="button"
+        data-bs-toggle="dropdown"
+        aria-expanded="false"
+      >
+        <i class="bi bi-person-circle me-1" aria-hidden="true"></i>
+        {{ user.username }}
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li>
+          <form method="post" action="/logout">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="dropdown-item">
+              <i class="bi bi-box-arrow-right me-2" aria-hidden="true"></i>
+              Log out
+            </button>
+          </form>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="container py-4">
   {% if flash %}
   {% set flash_kind, flash_message = flash %}
-  <p role="{{ 'alert' if flash_kind == 'error' else 'status' }}" class="flash {{ flash_kind }}">
-    {{ flash_message }}
-  </p>
+  <div
+    class="alert alert-{{ 'danger' if flash_kind == 'error' else 'success' }} alert-dismissible fade show d-flex align-items-center gap-2"
+    role="{{ 'alert' if flash_kind == 'error' else 'status' }}"
+  >
+    <i
+      class="bi {{ 'bi-exclamation-triangle-fill' if flash_kind == 'error' else 'bi-check-circle-fill' }}"
+      aria-hidden="true"
+    ></i>
+    <span>{{ flash_message }}</span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
   {% endif %}
 
-  <div class="page-heading">
-    <hgroup>
-      <h2>{{ month_label or "All expenses" }}</h2>
-      <p>{{ expenses | length }} expense{{ "" if expenses | length == 1 else "s" }}</p>
-    </hgroup>
-    <button type="button" onclick="document.getElementById('new-entry').showModal()">
-      New +
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <h1 class="h3 mb-0">{{ month_label or "All time" }}</h1>
+      <span class="text-body-secondary">
+        {{ expenses_count }} expense{{ "" if expenses_count == 1 else "s" }}
+        · {{ incomes_count }} income{{ "" if incomes_count == 1 else "s" }}
+      </span>
+    </div>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#new-entry">
+      New <i class="bi bi-plus-lg" aria-hidden="true"></i>
     </button>
   </div>
 
-  <dialog id="new-entry">
-    <article>
-      <header>
-        <button
-          type="button"
-          rel="prev"
-          aria-label="Close"
-          onclick="this.closest('dialog').close()"
-        ></button>
-        <h3 style="margin: 0">New entry</h3>
-      </header>
-      <form method="post" action="/entries">
+  <div class="d-flex justify-content-end align-items-center gap-2 mb-2">
+    <span class="text-body-secondary small" id="currency-switch-label">Show amounts in</span>
+    <div class="btn-group btn-group-sm" role="group" aria-labelledby="currency-switch-label">
+      <input type="radio" class="btn-check" name="currency-view" id="currency-uyu" value="uyu" checked />
+      <label class="btn btn-outline-secondary" for="currency-uyu">$</label>
+      <input type="radio" class="btn-check" name="currency-view" id="currency-usd" value="usd" />
+      <label class="btn btn-outline-secondary" for="currency-usd">U$S</label>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <i class="bi bi-arrow-down-circle summary-icon text-success" aria-hidden="true"></i>
+          <div>
+            <div class="text-body-secondary small">Income</div>
+            <div class="fs-4 fw-semibold amount">{{ money_by_currency(totals, "income") }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body d-flex align-items-center gap-3">
+          <i class="bi bi-arrow-up-circle summary-icon text-danger" aria-hidden="true"></i>
+          <div>
+            <div class="text-body-secondary small">Expenses</div>
+            <div class="fs-4 fw-semibold amount">{{ money_by_currency(totals, "expenses") }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card shadow-sm h-100 border-primary-subtle">
+        <div class="card-body d-flex align-items-center gap-3">
+          <i class="bi bi-piggy-bank summary-icon text-primary" aria-hidden="true"></i>
+          <div>
+            <div class="text-body-secondary small">Net (income − expenses)</div>
+            <div class="fs-4 fw-semibold amount">{{ money_by_currency(totals, "net", signed=true) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if chart %}
+  <div class="card shadow-sm mb-4">
+    <div class="card-header bg-body">
+      <h2 class="h6 mb-0">
+        <i class="bi bi-graph-up text-primary me-1" aria-hidden="true"></i>
+        Expenses per month
+      </h2>
+    </div>
+    <div class="card-body">
+      <div class="chart-container">
+        <canvas id="monthly-chart" role="img" aria-label="Line chart of expense totals for the last 12 months"></canvas>
+      </div>
+      <p class="text-body-secondary small mb-0 mt-2">Click a month to see its entries.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="get" action="/" class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <label for="month" class="visually-hidden">Month</label>
+    <div class="input-group w-auto">
+      <span class="input-group-text"><i class="bi bi-calendar3" aria-hidden="true"></i></span>
+      <input type="month" class="form-control" id="month" name="month" value="{{ month or '' }}" />
+    </div>
+    <button type="submit" class="btn btn-outline-secondary">
+      <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+      Filter
+    </button>
+    {% if month %}
+    <a href="/" class="btn btn-link text-decoration-none">
+      <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+      Show all
+    </a>
+    {% endif %}
+  </form>
+
+  {% if entries %}
+  <div class="card shadow-sm">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th class="text-end">Amount</th>
+            <th><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td class="text-nowrap">{{ e.date[:10] }}</td>
+            <td>
+              {% if e.kind == "income" %}
+              <span class="badge rounded-pill bg-success-subtle text-success-emphasis">
+                <i class="bi bi-arrow-down-short" aria-hidden="true"></i>{{ e.label | capitalize }}
+              </span>
+              {% else %}
+              <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">
+                {{ e.label | capitalize }}
+              </span>
+              {% endif %}
+            </td>
+            <td>{{ e.description or "" }}</td>
+            <td class="text-end text-nowrap amount fw-medium">{{ entry_amount(e) }}</td>
+            <td class="text-end">
+              <button
+                type="button"
+                class="btn btn-sm btn-link link-danger p-1"
+                data-bs-toggle="modal"
+                data-bs-target="#delete-entry"
+                data-action="/entries/{{ e.kind }}/{{ e.id }}/delete"
+                {% for currency in ["uyu", "usd"] %}
+                data-summary-{{ currency }}="{{ e.kind | capitalize }} · {{ e.label | capitalize }} · {{ currency_prefix[currency] }} {{ e['amount_' ~ currency] | money }} · {{ e.date[:10] }}"
+                {% endfor %}
+                aria-label="Delete {{ e.kind }} from {{ e.date[:10] }}"
+                title="Delete"
+              >
+                <i class="bi bi-trash3" aria-hidden="true"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card shadow-sm">
+    <div class="card-body text-center text-body-secondary py-5">
+      <i class="bi bi-inbox fs-1 d-block mb-2" aria-hidden="true"></i>
+      Nothing recorded {{ "for " ~ month_label if month_label else "yet" }}.
+    </div>
+  </div>
+  {% endif %}
+</main>
+
+<div class="modal fade" id="new-entry" tabindex="-1" aria-labelledby="new-entry-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form class="modal-content" method="post" action="/entries">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="new-entry-title">New entry</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        <label>
-          Type
-          <select name="kind" required onchange="toggleEntryKind(this.value)">
+
+        <div class="mb-3">
+          <label for="entry-kind" class="form-label">Type</label>
+          <select id="entry-kind" name="kind" class="form-select" required>
             <option value="expense" selected>Expense</option>
             <option value="income">Income</option>
           </select>
-        </label>
-        <label for="entry-amount">Amount</label>
-        <div class="amount-row">
-          <input
-            type="number"
-            id="entry-amount"
-            name="amount"
-            inputmode="decimal"
-            step="0.01"
-            min="0.01"
-            placeholder="0.00"
-            required
-          />
-          <select name="currency" aria-label="Currency" required>
-            <option value="UYU" selected>$</option>
-            <option value="USD">U$S</option>
-          </select>
         </div>
-        <label data-kind="expense">
-          Category
-          <select name="category" required>
+
+        <div class="mb-3">
+          <label for="entry-amount" class="form-label">Amount</label>
+          <div class="input-group">
+            <input
+              type="number"
+              id="entry-amount"
+              name="amount"
+              class="form-control"
+              inputmode="decimal"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              required
+            />
+            <select name="currency" class="form-select currency-select" aria-label="Currency" required>
+              <option value="UYU" selected>$</option>
+              <option value="USD">U$S</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mb-3" data-kind="expense">
+          <label for="entry-category" class="form-label">Category</label>
+          <select id="entry-category" name="category" class="form-select" required>
             <option value="" selected disabled>Choose a category…</option>
             {% for c in categories %}
             <option value="{{ c }}">{{ c | capitalize }}</option>
             {% endfor %}
           </select>
-        </label>
-        <label data-kind="income" hidden>
-          Source
-          <select name="source" required disabled>
+        </div>
+
+        <div class="mb-3" data-kind="income" hidden>
+          <label for="entry-source" class="form-label">Source</label>
+          <select id="entry-source" name="source" class="form-select" required disabled>
             <option value="" selected disabled>Choose a source…</option>
             {% for s in income_sources %}
             <option value="{{ s }}">{{ s | capitalize }}</option>
             {% endfor %}
           </select>
-        </label>
-        <footer>
-          <button type="button" class="secondary" onclick="this.closest('dialog').close()">
-            Cancel
-          </button>
-          <button type="submit">Save</button>
-        </footer>
-      </form>
-    </article>
-  </dialog>
+        </div>
 
-  <section class="summary">
-    <article>
-      <span class="muted">Total (UYU)</span>
-      <strong>$ {{ total_uyu | money }}</strong>
-    </article>
-    <article>
-      <span class="muted">Total (USD)</span>
-      <strong>US$ {{ total_usd | money }}</strong>
-    </article>
-  </section>
-
-  <form method="get" action="/" class="filter" style="margin-block: 2rem 1rem">
-    <label for="month">Month</label>
-    <input type="month" id="month" name="month" value="{{ month or '' }}" />
-    <button type="submit" class="secondary">Filter</button>
-    {% if month %}<a href="/">Show all</a>{% endif %}
-  </form>
-
-  {% if expenses %}
-  <div class="overflow-auto">
-    <table class="striped">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Category</th>
-          <th>Description</th>
-          <th class="amount">UYU</th>
-          <th class="amount">USD</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for e in expenses %}
-        <tr>
-          <td>{{ e.date[:10] }}</td>
-          <td>{{ e.category | capitalize }}</td>
-          <td>{{ e.description or "" }}</td>
-          <td class="amount">{{ e.amount_uyu | money }}</td>
-          <td class="amount">{{ e.amount_usd | money }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        <div class="mb-3">
+          <label for="entry-description" class="form-label">
+            Description <span class="text-body-secondary small">(optional)</span>
+          </label>
+          <input
+            type="text"
+            id="entry-description"
+            name="description"
+            class="form-control"
+            maxlength="{{ description_max }}"
+            placeholder="e.g. Lunch downtown"
+            autocomplete="off"
+          />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1" aria-hidden="true"></i>
+          Save
+        </button>
+      </div>
+    </form>
   </div>
-  {% else %}
-  <p class="muted">
-    No expenses {{ "for " ~ month_label if month_label else "yet" }}.
-  </p>
-  {% endif %}
-</main>
+</div>
 
+<div class="modal fade" id="delete-entry" tabindex="-1" aria-labelledby="delete-entry-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <form class="modal-content" method="post" action="">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <input type="hidden" name="month" value="{{ month or '' }}" />
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="delete-entry-title">Delete entry?</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1" id="delete-entry-summary"></p>
+        <p class="text-body-secondary small mb-0">This can't be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-danger">
+          <i class="bi bi-trash3 me-1" aria-hidden="true"></i>
+          Delete
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script>
+  const entryModal = document.getElementById("new-entry");
+  const kindSelect = document.getElementById("entry-kind");
+
   // Show the category list for expenses and the source list for incomes.
   // The hidden list is disabled so it isn't required or submitted.
   function toggleEntryKind(kind) {
-    document.querySelectorAll("#new-entry [data-kind]").forEach((label) => {
-      const active = label.dataset.kind === kind;
-      label.hidden = !active;
-      label.querySelector("select").disabled = !active;
+    entryModal.querySelectorAll("[data-kind]").forEach((field) => {
+      const active = field.dataset.kind === kind;
+      field.hidden = !active;
+      field.querySelector("select").disabled = !active;
     });
   }
+  kindSelect.addEventListener("change", () => toggleEntryKind(kindSelect.value));
   // Browsers may restore the previous Type on reload; keep the lists in sync
-  toggleEntryKind(document.querySelector("#new-entry [name=kind]").value);
+  toggleEntryKind(kindSelect.value);
+
+  // Bootstrap modals ignore autofocus, so focus the amount when it opens
+  entryModal.addEventListener("shown.bs.modal", () =>
+    document.getElementById("entry-amount").focus()
+  );
+
+  // Fill the delete confirmation with the row whose button opened it
+  document.getElementById("delete-entry").addEventListener("show.bs.modal", (event) => {
+    const button = event.relatedTarget;
+    event.target.querySelector("form").action = button.dataset.action;
+    // Describe it in the currency the page is showing (`currency` is set below)
+    document.getElementById("delete-entry-summary").textContent =
+      button.dataset[currency === "usd" ? "summaryUsd" : "summaryUyu"];
+  });
+
+  // ── $ / U$S switch ──
+  // Amounts are rendered in both currencies; this shows one and hides the other.
+  // Other widgets (the chart) subscribe with onCurrencyChange.
+  const CURRENCY_KEY = "dashboard-currency";
+  const currencyListeners = [];
+  let currency = "uyu";
+
+  function onCurrencyChange(listener) {
+    currencyListeners.push(listener);
+  }
+
+  function setCurrency(value) {
+    currency = value;
+    document.querySelectorAll("[data-currency]").forEach((el) => {
+      el.hidden = el.dataset.currency !== value;
+    });
+    document.getElementById("currency-" + value).checked = true;
+    currencyListeners.forEach((listener) => listener(value));
+    try {
+      localStorage.setItem(CURRENCY_KEY, value);
+    } catch {
+      // Storage can be unavailable (private mode); the switch still works
+    }
+  }
+
+  document.querySelectorAll("input[name=currency-view]").forEach((radio) =>
+    radio.addEventListener("change", () => setCurrency(radio.value))
+  );
+</script>
+
+{% if chart %}
+<script
+  src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"
+  integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+  crossorigin="anonymous"
+></script>
+<script>
+  const chartData = {{ chart | tojson }};
+  const selectedMonth = {{ month | tojson }};
+  const currencyPrefix = { uyu: "$ ", usd: "U$S " };
+  const formatMoney = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  // Chart.js doesn't read CSS, so pull colors from the active Bootstrap theme
+  function themeColors() {
+    const css = getComputedStyle(document.documentElement);
+    const v = (name) => css.getPropertyValue(name).trim();
+    return {
+      line: v("--bs-primary"),
+      fill: `rgba(${v("--bs-primary-rgb")}, 0.12)`,
+      text: v("--bs-secondary-color"),
+      grid: v("--bs-border-color-translucent"),
+      surface: v("--bs-body-bg"),
+    };
+  }
+
+  // Bigger point for the month the dashboard is filtered to
+  const pointRadius = chartData.months.map((m) => (m === selectedMonth ? 7 : 4));
+
+  const monthlyChart = new Chart(document.getElementById("monthly-chart"), {
+    type: "line",
+    data: {
+      labels: chartData.labels,
+      datasets: [
+        {
+          label: "Expenses",
+          data: chartData[currency],
+          fill: true,
+          tension: 0.3,
+          // Smooth, but never overshoot real values (e.g. dip below 0)
+          cubicInterpolationMode: "monotone",
+          borderWidth: 2,
+          pointRadius,
+          pointHoverRadius: 7,
+        },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => currencyPrefix[currency] + formatMoney.format(ctx.parsed.y),
+          },
+        },
+      },
+      scales: {
+        // Keep month labels horizontal; Chart.js skips some when space is tight
+        x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: (value) => currencyPrefix[currency] + value.toLocaleString("en-US"),
+          },
+        },
+      },
+      onClick: (event, elements) => {
+        if (elements.length) {
+          window.location = "/?month=" + chartData.months[elements[0].index];
+        }
+      },
+      onHover: (event, elements) => {
+        event.native.target.style.cursor = elements.length ? "pointer" : "default";
+      },
+    },
+  });
+
+  function applyChartTheme() {
+    const c = themeColors();
+    const ds = monthlyChart.data.datasets[0];
+    ds.borderColor = c.line;
+    ds.backgroundColor = c.fill;
+    ds.pointBackgroundColor = c.line;
+    ds.pointBorderColor = c.surface;
+    for (const axis of Object.values(monthlyChart.options.scales)) {
+      axis.ticks.color = c.text;
+      axis.grid.color = c.grid;
+      axis.border = { color: c.grid };
+    }
+    monthlyChart.update();
+  }
+  applyChartTheme();
+  // base.html switches the Bootstrap theme on OS changes; recolor after it
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyChartTheme);
+
+  onCurrencyChange((value) => {
+    monthlyChart.data.datasets[0].data = chartData[value];
+    monthlyChart.update();
+  });
+</script>
+{% endif %}
+
+<script>
+  // Restore the last currency choice once everything has subscribed
+  let savedCurrency = null;
+  try {
+    savedCurrency = localStorage.getItem(CURRENCY_KEY);
+  } catch {}
+  if (savedCurrency === "uyu" || savedCurrency === "usd") setCurrency(savedCurrency);
 </script>
 {% endblock %}

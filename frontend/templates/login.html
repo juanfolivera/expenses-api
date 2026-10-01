@@ -3,34 +3,58 @@
 {% block title %}Log in · {{ app_name }}{% endblock %}
 
 {% block body %}
-<main class="container" style="max-width: 26rem; padding-top: 10vh">
-  <article>
-    <header>
-      <h2 style="margin: 0">{{ app_name }}</h2>
-      <p class="muted" style="margin: 0">Log in to see your expenses</p>
-    </header>
+<main class="container auth-page py-5">
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-wallet2 display-5 text-primary" aria-hidden="true"></i>
+        <h1 class="h3 mt-2 mb-1">{{ app_name }}</h1>
+        <p class="text-body-secondary mb-0">Log in to see your expenses</p>
+      </div>
 
-    {% if error %}
-    <p role="alert" style="color: var(--pico-del-color)">{{ error }}</p>
-    {% endif %}
+      {% if error %}
+      <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
 
-    <form method="post" action="/login">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-      <label>
-        Username
-        <input name="username" autocomplete="username" required autofocus />
-      </label>
-      <label>
-        Password
-        <input
-          type="password"
-          name="password"
-          autocomplete="current-password"
-          required
-        />
-      </label>
-      <button type="submit">Log in</button>
-    </form>
-  </article>
+      <form method="post" action="/login">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="form-floating mb-3">
+          <input
+            class="form-control"
+            id="username"
+            name="username"
+            placeholder="Username"
+            autocomplete="username"
+            required
+            autofocus
+          />
+          <label for="username">Username</label>
+        </div>
+        <div class="form-floating mb-4">
+          <input
+            type="password"
+            class="form-control"
+            id="password"
+            name="password"
+            placeholder="Password"
+            autocomplete="current-password"
+            required
+          />
+          <label for="password">Password</label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg w-100">
+          <i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>
+          Log in
+        </button>
+      </form>
+
+      <p class="text-center text-body-secondary mt-4 mb-0">
+        New here? <a href="/register">Create an account</a>
+      </p>
+    </div>
+  </div>
 </main>
 {% endblock %}

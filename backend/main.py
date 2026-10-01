@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -54,6 +55,7 @@ app.add_middleware(
 )
 
 app.include_router(web.router)
+app.mount("/static", StaticFiles(directory=web.STATIC_DIR), name="static")
 
 db.init_db()
 
@@ -127,8 +129,10 @@ class LoginRequest(BaseModel):
 
 
 class UserRegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
-    password: str = Field(..., min_length=8)
+    username: str = Field(
+        ..., min_length=auth.USERNAME_MIN, max_length=auth.USERNAME_MAX
+    )
+    password: str = Field(..., min_length=auth.PASSWORD_MIN)
 
 
 class UserResponse(BaseModel):

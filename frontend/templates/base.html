@@ -4,32 +4,36 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    <script>
+      // Follow the OS light/dark setting (Bootstrap doesn't do this on its own)
+      const dark = window.matchMedia("(prefers-color-scheme: dark)");
+      const applyTheme = () =>
+        document.documentElement.setAttribute("data-bs-theme", dark.matches ? "dark" : "light");
+      applyTheme();
+      dark.addEventListener("change", applyTheme);
+    </script>
     <link
       rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+      crossorigin="anonymous"
     />
-    <style>
-      .amount { text-align: right; font-variant-numeric: tabular-nums; }
-      .muted { color: var(--pico-muted-color); }
-      .summary { display: flex; flex-wrap: wrap; gap: 1rem; }
-      .summary article { flex: 1 1 12rem; margin: 0; }
-      .summary strong { display: block; font-size: 1.5rem; }
-      .filter { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
-      .filter input, .filter button { width: auto; margin: 0; }
-      nav details.dropdown form { margin: 0; }
-      nav details.dropdown button { width: 100%; margin: 0; }
-      .page-heading { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; margin-bottom: var(--pico-typography-spacing-vertical); }
-      .page-heading hgroup { margin: 0; }
-      .page-heading > button { width: auto; margin: 0; }
-      .amount-row { display: flex; gap: 0.5rem; }
-      .amount-row select { width: 6rem; flex: none; }
-      dialog form footer { display: flex; justify-content: flex-end; gap: 0.5rem; }
-      dialog form footer button { width: auto; margin: 0; }
-      .flash.success { color: var(--pico-ins-color); }
-      .flash.error { color: var(--pico-del-color); }
-    </style>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
+      integrity="sha384-CK2SzKma4jA5H/MXDUU7i1TqZlCFaD4T01vtyDFvPlD97JQyS+IsSh1nI2EFbpyk"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="{{ static_url('css/app.css') }}" />
   </head>
-  <body>
+  <body class="bg-body-tertiary">
     {% block body %}{% endblock %}
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+      crossorigin="anonymous"
+    ></script>
+    {% block scripts %}{% endblock %}
   </body>
 </html>

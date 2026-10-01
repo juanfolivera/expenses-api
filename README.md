@@ -22,10 +22,12 @@ expenses-api/
 │   ├── auth.py      # JWT utilities and get_current_user dependency
 │   ├── database.py  # SQLite / PostgreSQL CRUD
 │   ├── dolar_uy.py  # USD/UYU exchange rate client
+│   ├── categories.py # Allowed expense categories and income sources
 │   └── config.py    # Central configuration (reads from env vars)
 ├── frontend/
 │   ├── web.py       # Website routes: login, dashboard, logout
-│   └── templates/   # Jinja2 templates
+│   ├── templates/   # Jinja2 templates
+│   └── static/      # CSS (served at /static)
 ├── requirements.txt # Dependencies
 ├── Procfile         # Railway startup command
 ├── .env             # Local env variables — never commit this

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Create account · {{ app_name }}{% endblock %}
+
+{% block body %}
+<main class="container auth-page py-5">
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <div class="text-center mb-4">
+        <i class="bi bi-person-plus display-5 text-primary" aria-hidden="true"></i>
+        <h1 class="h3 mt-2 mb-1">Create account</h1>
+        <p class="text-body-secondary mb-0">Start tracking your expenses</p>
+      </div>
+
+      {% if error %}
+      <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+        <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" action="/register">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="form-floating mb-3">
+          <input
+            class="form-control"
+            id="username"
+            name="username"
+            placeholder="Username"
+            value="{{ username }}"
+            autocomplete="username"
+            minlength="{{ account_rules.username_min }}"
+            maxlength="{{ account_rules.username_max }}"
+            required
+            autofocus
+          />
+          <label for="username">Username</label>
+        </div>
+        <div class="mb-3">
+          <div class="form-floating">
+            <input
+              type="password"
+              class="form-control"
+              id="password"
+              name="password"
+              placeholder="Password"
+              autocomplete="new-password"
+              minlength="{{ account_rules.password_min }}"
+              aria-describedby="password-help"
+              required
+            />
+            <label for="password">Password</label>
+          </div>
+          <div id="password-help" class="form-text">
+            At least {{ account_rules.password_min }} characters.
+          </div>
+        </div>
+        <div class="form-floating mb-4">
+          <input
+            type="password"
+            class="form-control"
+            id="password-confirm"
+            name="password_confirm"
+            placeholder="Confirm password"
+            autocomplete="new-password"
+            minlength="{{ account_rules.password_min }}"
+            required
+          />
+          <label for="password-confirm">Confirm password</label>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg w-100">
+          <i class="bi bi-person-check me-1" aria-hidden="true"></i>
+          Create account
+        </button>
+      </form>
+
+      <p class="text-center text-body-secondary mt-4 mb-0">
+        Already have an account? <a href="/login">Log in</a>
+      </p>
+    </div>
+  </div>
+</main>
+{% endblock %}

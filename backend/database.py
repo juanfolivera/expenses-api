@@ -383,6 +383,54 @@ def monthly_summary(user_id: int, month: str) -> dict:
         return dict(row) if row else _empty
 
 
+def monthly_totals(user_id: int, since_month: str) -> list[dict]:
+    """
+    A user's expense totals per month, from since_month ('YYYY-MM') onwards.
+    Months without expenses are not included.
+    """
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        to_char(date, 'YYYY-MM')  AS month,
+                        ROUND(SUM(amount_uyu)::numeric, 2) AS total_uyu,
+                        ROUND(SUM(amount_usd)::numeric, 2) AS total_usd
+                    FROM expenses
+                    WHERE user_id = %s AND to_char(date, 'YYYY-MM') >= %s
+                    GROUP BY to_char(date, 'YYYY-MM')
+                    ORDER BY month
+                    """,
+                    (user_id, since_month),
+                )
+                rows = cur.fetchall()
+    else:
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    strftime('%Y-%m', date)   AS month,
+                    ROUND(SUM(amount_uyu), 2) AS total_uyu,
+                    ROUND(SUM(amount_usd), 2) AS total_usd
+                FROM expenses
+                WHERE user_id = ? AND strftime('%Y-%m', date) >= ?
+                GROUP BY month
+                ORDER BY month
+                """,
+                (user_id, since_month),
+            ).fetchall()
+    # Postgres returns Decimal; normalize to float so the result is JSON-friendly
+    return [
+        {
+            "month": r["month"],
+            "total_uyu": float(r["total_uyu"]),
+            "total_usd": float(r["total_usd"]),
+        }
+        for r in rows
+    ]
+
+
 def summary_by_category(user_id: int, month: str | None = None) -> list[dict]:
     """A user's totals grouped by category, optionally filtered by month."""
     if USE_POSTGRES:
