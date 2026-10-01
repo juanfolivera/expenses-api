@@ -1,7 +1,7 @@
 """
 database.py
 -----------
-Database setup and CRUD operations for expenses.
+Database setup and CRUD operations for expenses and incomes.
 Uses PostgreSQL in production (Railway) and SQLite locally for development.
 
 The database URL is read from the DATABASE_URL environment variable.
@@ -59,7 +59,7 @@ def _row_to_dict(row) -> dict:
 
 
 def init_db():
-    """Creates the users and expenses tables if they don't exist."""
+    """Creates the users, expenses and incomes tables if they don't exist."""
     if USE_POSTGRES:
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -91,6 +91,22 @@ def init_db():
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_expenses_user_id"
                     " ON expenses (user_id)"
+                )
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS incomes (
+                        id          SERIAL PRIMARY KEY,
+                        user_id     INTEGER     REFERENCES users(id) ON DELETE CASCADE,
+                        amount_uyu  REAL        NOT NULL,
+                        amount_usd  REAL        NOT NULL,
+                        dollar_rate REAL        NOT NULL,
+                        source      TEXT        NOT NULL,
+                        description TEXT,
+                        date        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                """)
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_incomes_user_id"
+                    " ON incomes (user_id)"
                 )
             conn.commit()
     else:
@@ -124,6 +140,21 @@ def init_db():
                 )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_expenses_user_id ON expenses (user_id)"
+            )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS incomes (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                    amount_uyu  REAL NOT NULL,
+                    amount_usd  REAL NOT NULL,
+                    dollar_rate REAL NOT NULL,
+                    source      TEXT NOT NULL,
+                    description TEXT,
+                    date        TEXT NOT NULL
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_incomes_user_id ON incomes (user_id)"
             )
             conn.commit()
 
@@ -437,6 +468,153 @@ def delete_expense(expense_id: int, user_id: int) -> bool:
             cursor = conn.execute(
                 f"DELETE FROM expenses WHERE id = {p} AND user_id = {p}",
                 (expense_id, user_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+
+# ── Incomes CRUD ──────────────────────────────────────────────────────────────
+
+
+def create_income(
+    user_id: int,
+    amount_uyu: float,
+    amount_usd: float,
+    dollar_rate: float,
+    source: str,
+    description: str | None = None,
+    date: datetime | None = None,
+) -> dict:
+    date_val = date or datetime.now()
+    p = _placeholder()
+
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    f"""
+                    INSERT INTO incomes (
+                        user_id, amount_uyu, amount_usd, dollar_rate,
+                        source, description, date
+                    )
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    RETURNING *
+                    """,
+                    (
+                        user_id,
+                        amount_uyu,
+                        amount_usd,
+                        dollar_rate,
+                        source,
+                        description,
+                        date_val,
+                    ),
+                )
+                row = cur.fetchone()
+            conn.commit()
+        return _serialize(dict(row))
+    else:
+        with get_connection() as conn:
+            cursor = conn.execute(
+                f"""
+                INSERT INTO incomes (
+                    user_id, amount_uyu, amount_usd, dollar_rate,
+                    source, description, date
+                )
+                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p})
+                """,
+                (
+                    user_id,
+                    amount_uyu,
+                    amount_usd,
+                    dollar_rate,
+                    source,
+                    description,
+                    date_val.isoformat(),
+                ),
+            )
+            conn.commit()
+            return get_income(cursor.lastrowid, user_id)
+
+
+def get_income(income_id: int, user_id: int) -> dict | None:
+    p = _placeholder()
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    f"SELECT * FROM incomes WHERE id = {p} AND user_id = {p}",
+                    (income_id, user_id),
+                )
+                row = cur.fetchone()
+        return _serialize(dict(row)) if row else None
+    else:
+        with get_connection() as conn:
+            row = conn.execute(
+                f"SELECT * FROM incomes WHERE id = {p} AND user_id = {p}",
+                (income_id, user_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+
+def list_incomes(user_id: int, month: str | None = None) -> list[dict]:
+    """
+    Lists a user's incomes, optionally filtered by month.
+
+    Args:
+        month: format 'YYYY-MM', e.g. '2026-05'
+    """
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if month:
+                    cur.execute(
+                        "SELECT * FROM incomes"
+                        " WHERE user_id = %s AND to_char(date, 'YYYY-MM') = %s"
+                        " ORDER BY date DESC",
+                        (user_id, month),
+                    )
+                else:
+                    cur.execute(
+                        "SELECT * FROM incomes WHERE user_id = %s ORDER BY date DESC",
+                        (user_id,),
+                    )
+                rows = cur.fetchall()
+        return [_serialize(dict(r)) for r in rows]
+    else:
+        with get_connection() as conn:
+            if month:
+                rows = conn.execute(
+                    "SELECT * FROM incomes"
+                    " WHERE user_id = ? AND strftime('%Y-%m', date) = ?"
+                    " ORDER BY date DESC",
+                    (user_id, month),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM incomes WHERE user_id = ? ORDER BY date DESC",
+                    (user_id,),
+                ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def delete_income(income_id: int, user_id: int) -> bool:
+    p = _placeholder()
+    if USE_POSTGRES:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"DELETE FROM incomes WHERE id = {p} AND user_id = {p}",
+                    (income_id, user_id),
+                )
+                deleted = cur.rowcount > 0
+            conn.commit()
+        return deleted
+    else:
+        with get_connection() as conn:
+            cursor = conn.execute(
+                f"DELETE FROM incomes WHERE id = {p} AND user_id = {p}",
+                (income_id, user_id),
             )
             conn.commit()
             return cursor.rowcount > 0
