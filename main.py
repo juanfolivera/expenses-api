@@ -89,6 +89,45 @@ class ExpenseResponse(BaseModel):
     date: str
 
 
+VALID_INCOME_SOURCES = [
+    "salary",
+    "freelance",
+    "investment",
+    "gift",
+    "other",
+]
+
+
+class IncomeRequest(BaseModel):
+    amount_uyu: float = Field(..., gt=0, description="Amount in Uruguayan pesos")
+    source: str = Field(..., description=f"One of: {', '.join(VALID_INCOME_SOURCES)}")
+    description: Optional[str] = Field(None, description="Optional note or description")
+    date: Optional[str] = Field(
+        None,
+        description="ISO 8601, e.g. '2026-05-01T09:00:00'. Defaults to now.",
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "amount_uyu": 85000,
+                "source": "salary",
+                "description": "May salary",
+            }
+        }
+    }
+
+
+class IncomeResponse(BaseModel):
+    id: int
+    amount_uyu: float
+    amount_usd: float
+    dollar_rate: float
+    source: str
+    description: Optional[str]
+    date: str
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -281,6 +320,79 @@ def delete_expense(expense_id: int, user: dict = Depends(auth.get_current_user))
     """Deletes an expense by ID."""
     if not db.delete_expense(expense_id, user["id"]):
         raise HTTPException(status_code=404, detail="Expense not found")
+
+
+# ── Incomes ───────────────────────────────────────────────────────────────────
+
+
+@app.post(
+    "/incomes",
+    response_model=IncomeResponse,
+    status_code=201,
+    tags=["Incomes"],
+)
+def create_income(income: IncomeRequest, user: dict = Depends(auth.get_current_user)):
+    """
+    Records a new income (e.g. monthly salary). Automatically fetches the
+    current exchange rate and stores the USD equivalent alongside the rate used.
+    """
+    if income.source not in VALID_INCOME_SOURCES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid source. Options: {', '.join(VALID_INCOME_SOURCES)}",
+        )
+    try:
+        rate = dolar_uy.get_dollar_cached()
+    except Exception as e:
+        raise HTTPException(
+            status_code=503, detail=f"Could not fetch exchange rate: {e}"
+        )
+
+    date = None
+    if income.date:
+        try:
+            date = datetime.fromisoformat(income.date)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="Invalid date format. Use ISO 8601."
+            )
+
+    return db.create_income(
+        user_id=user["id"],
+        amount_uyu=income.amount_uyu,
+        amount_usd=round(income.amount_uyu / rate.buy, 2),
+        dollar_rate=rate.sell,
+        source=income.source,
+        description=income.description,
+        date=date,
+    )
+
+
+@app.get("/incomes", response_model=list[IncomeResponse], tags=["Incomes"])
+def list_incomes(
+    month: Optional[str] = Query(
+        None, description="Filter by month, format YYYY-MM. E.g. 2026-05"
+    ),
+    user: dict = Depends(auth.get_current_user),
+):
+    """Lists the current user's incomes, optionally filtered by month."""
+    return db.list_incomes(user["id"], month=month)
+
+
+@app.get("/incomes/{income_id}", response_model=IncomeResponse, tags=["Incomes"])
+def get_income(income_id: int, user: dict = Depends(auth.get_current_user)):
+    """Returns a single income by ID."""
+    income = db.get_income(income_id, user["id"])
+    if not income:
+        raise HTTPException(status_code=404, detail="Income not found")
+    return income
+
+
+@app.delete("/incomes/{income_id}", status_code=204, tags=["Incomes"])
+def delete_income(income_id: int, user: dict = Depends(auth.get_current_user)):
+    """Deletes an income by ID."""
+    if not db.delete_income(income_id, user["id"]):
+        raise HTTPException(status_code=404, detail="Income not found")
 
 
 # ── Summary ───────────────────────────────────────────────────────────────────
