@@ -10,21 +10,24 @@ is checked against the one stored in the session.
 
 import secrets
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
 from fastapi import APIRouter, Form, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-import auth
-import config
-import database as db
+from backend import auth, config, dolar_uy
+from backend import database as db
+from backend.categories import VALID_CATEGORIES, VALID_INCOME_SOURCES
 
 router = APIRouter(include_in_schema=False)
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.filters["money"] = lambda value: f"{value:,.2f}"
 templates.env.globals["app_name"] = config.APP_NAME
+templates.env.globals["categories"] = VALID_CATEGORIES
+templates.env.globals["income_sources"] = VALID_INCOME_SOURCES
 
 
 # ── Session helpers ───────────────────────────────────────────────────────────
@@ -131,6 +134,7 @@ def dashboard(request: Request, month: str | None = None):
         {
             "user": user,
             "csrf_token": _csrf_token(request),
+            "flash": request.session.pop("flash", None),
             "expenses": expenses,
             "month": month,
             "month_label": month_label,
@@ -138,3 +142,74 @@ def dashboard(request: Request, month: str | None = None):
             "total_usd": sum(e["amount_usd"] for e in expenses),
         },
     )
+
+
+# ── New entry ─────────────────────────────────────────────────────────────────
+
+
+def _parse_amount(raw: str) -> Decimal | None:
+    """Parses a positive decimal amount, rounded to cents. None if invalid."""
+    try:
+        amount = Decimal(raw.strip().replace(",", "."))
+    except InvalidOperation:
+        return None
+    if not amount.is_finite() or amount <= 0:
+        return None
+    return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+@router.post("/entries")
+def create_entry(
+    request: Request,
+    kind: str = Form(...),
+    amount: str = Form(...),
+    currency: str = Form(...),
+    category: str = Form(""),
+    source: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    user = _current_user(request)
+    if not user:
+        return _redirect("/login")
+    if not _valid_csrf(request, csrf_token):
+        request.session["flash"] = ("error", "Your session expired. Please try again.")
+        return _redirect("/")
+
+    value = _parse_amount(amount)
+    if kind not in ("expense", "income") or currency not in ("UYU", "USD") or not value:
+        request.session["flash"] = ("error", "Please enter a valid amount.")
+        return _redirect("/")
+    if (kind == "expense" and category not in VALID_CATEGORIES) or (
+        kind == "income" and source not in VALID_INCOME_SOURCES
+    ):
+        field = "category" if kind == "expense" else "source"
+        request.session["flash"] = ("error", f"Please choose a {field}.")
+        return _redirect("/")
+
+    try:
+        rate = dolar_uy.get_dollar_cached()
+    except Exception:
+        request.session["flash"] = ("error", "Could not fetch the exchange rate.")
+        return _redirect("/")
+
+    # Same conversion as the JSON API: USD = UYU / buy rate
+    if currency == "UYU":
+        amount_uyu = float(value)
+        amount_usd = round(amount_uyu / rate.buy, 2)
+    else:
+        amount_usd = float(value)
+        amount_uyu = round(amount_usd * rate.buy, 2)
+
+    entry = {
+        "user_id": user["id"],
+        "amount_uyu": amount_uyu,
+        "amount_usd": amount_usd,
+        "dollar_rate": rate.sell,
+    }
+    if kind == "expense":
+        db.create_expense(**entry, category=category)
+    else:
+        db.create_income(**entry, source=source)
+
+    request.session["flash"] = ("success", f"{kind.capitalize()} added.")
+    return _redirect("/")

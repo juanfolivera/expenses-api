@@ -24,7 +24,7 @@ if USE_POSTGRES:
     import psycopg2
     import psycopg2.extras  # for RealDictCursor (access columns by name)
 else:
-    SQLITE_PATH = Path(__file__).parent / "expenses.db"
+    SQLITE_PATH = Path(__file__).parent.parent / "expenses.db"
 
 
 # ── Connection ────────────────────────────────────────────────────────────────

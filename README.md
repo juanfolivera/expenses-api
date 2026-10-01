@@ -17,11 +17,15 @@ REST API to track expenses in Uruguayan pesos with automatic USD conversion.
 
 ```
 expenses-api/
-├── main.py          # API endpoints
-├── auth.py          # JWT utilities and get_current_user dependency
-├── database.py      # SQLite / PostgreSQL CRUD
-├── dolar_uy.py      # USD/UYU exchange rate client
-├── config.py        # Central configuration (reads from env vars)
+├── backend/
+│   ├── main.py      # App entrypoint and API endpoints
+│   ├── auth.py      # JWT utilities and get_current_user dependency
+│   ├── database.py  # SQLite / PostgreSQL CRUD
+│   ├── dolar_uy.py  # USD/UYU exchange rate client
+│   └── config.py    # Central configuration (reads from env vars)
+├── frontend/
+│   ├── web.py       # Website routes: login, dashboard, logout
+│   └── templates/   # Jinja2 templates
 ├── requirements.txt # Dependencies
 ├── Procfile         # Railway startup command
 ├── .env             # Local env variables — never commit this
@@ -54,7 +58,7 @@ The default `.env` works out of the box for local development — SQLite is used
 ### 3. Start the server
 
 ```bash
-uvicorn main:app --reload
+uvicorn backend.main:app --reload
 ```
 
 Server runs at `http://localhost:8000`  

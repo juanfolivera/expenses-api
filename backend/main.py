@@ -2,7 +2,7 @@
 main.py
 -------
 Expenses REST API with automatic USD/UYU conversion.
-Run with: uvicorn main:app --reload
+Run with: uvicorn backend.main:app --reload
 Interactive docs at: http://localhost:8000/docs
 """
 
@@ -14,11 +14,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
-import auth
-import config
-import database as db
-import dolar_uy
-import web
+from backend import auth, config, dolar_uy
+from backend import database as db
+from backend.categories import VALID_CATEGORIES, VALID_INCOME_SOURCES
+from frontend import web
 
 # Validate config at startup — catches missing prod variables early
 config.validate()
@@ -61,17 +60,6 @@ db.init_db()
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
-VALID_CATEGORIES = [
-    "food",
-    "transport",
-    "health",
-    "entertainment",
-    "clothing",
-    "home",
-    "education",
-    "other",
-]
-
 
 class ExpenseRequest(BaseModel):
     amount_uyu: float = Field(..., gt=0, description="Amount in Uruguayan pesos")
@@ -101,15 +89,6 @@ class ExpenseResponse(BaseModel):
     category: str
     description: Optional[str]
     date: str
-
-
-VALID_INCOME_SOURCES = [
-    "salary",
-    "freelance",
-    "investment",
-    "gift",
-    "other",
-]
 
 
 class IncomeRequest(BaseModel):

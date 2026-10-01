@@ -16,8 +16,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
-import config
-import database as db
+from backend import config
+from backend import database as db
 
 # ── Password hashing ──────────────────────────────────────────────────────────
 

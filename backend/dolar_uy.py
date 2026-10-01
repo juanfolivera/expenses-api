@@ -13,7 +13,7 @@ from datetime import datetime
 
 import requests
 
-import config as _config
+from backend import config as _config
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
